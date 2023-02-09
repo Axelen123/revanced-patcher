@@ -8,7 +8,6 @@ import app.revanced.patcher.fingerprint.method.impl.MethodFingerprint.Companion.
 import app.revanced.patcher.patch.*
 import app.revanced.patcher.util.VersionReader
 import lanchon.multidexlib2.BasicDexFileNamer
-import lanchon.multidexlib2.MultiDexIO
 import java.io.File
 
 /**
@@ -47,6 +46,10 @@ class Patcher(private val options: PatcherOptions) {
      */
     fun addIntegrations(integrations: List<File>) = context.integrations.add(integrations)
 
+    /**
+     * Add [Patch]es to the patcher.
+     * @param patches [Patch]es The patches to add.
+     */
     /**
      * Add [Patch]es to the patcher.
      * @param patches [Patch]es The patches to add.
