@@ -1,24 +1,22 @@
 package app.revanced.patcher
 
-import app.revanced.patcher.data.*
+import app.revanced.patcher.apk.Apk
 import app.revanced.patcher.logging.Logger
-import app.revanced.patcher.patch.Patch
+import app.revanced.patcher.patch.PatchClass
 import app.revanced.patcher.util.ClassMerger.merge
-import org.jf.dexlib2.iface.ClassDef
+import lanchon.multidexlib2.DexFileNamer
 import java.io.File
 
 data class PatcherContext(
-    val classes: MutableList<ClassDef>,
-    val resourceCacheDirectory: File,
+    val options: PatcherOptions,
 ) {
-    val packageMetadata = PackageMetadata()
-    internal val patches = mutableListOf<Class<out Patch<Context>>>()
+    val packageMetadata = Apk.PackageMetadata()
+    internal val patches = mutableListOf<PatchClass>()
     internal val integrations = Integrations(this)
-    internal val bytecodeContext = BytecodeContext(classes)
-    internal val resourceContext = ResourceContext(resourceCacheDirectory)
+    internal val bytecodeContext = BytecodeContext(options)
+    internal val resourceContext = ResourceContext(options)
 
     internal class Integrations(val context: PatcherContext) {
-        var callback: ((File) -> Unit)? = null
         private val integrations: MutableList<File> = mutableListOf()
 
         fun add(integrations: List<File>) = this@Integrations.integrations.addAll(integrations)
@@ -27,35 +25,31 @@ data class PatcherContext(
          * Merge integrations.
          * @param logger A logger.
          */
-        fun merge(logger: Logger) {
-            with(context.bytecodeContext.classes) {
+        fun merge(logger: Logger, dexFileNamer: DexFileNamer) {
+            context.bytecodeContext.classes.apply {
                 for (integrations in integrations) {
-                    callback?.let { it(integrations) }
+                    logger.info("Merging $integrations")
 
-                    for (classDef in lanchon.multidexlib2.MultiDexIO.readDexFile(
-                        true,
-                        integrations,
-                        NAMER,
-                        null,
-                        null
-                    ).classes) {
+                    for (classDef in lanchon.multidexlib2.MultiDexIO.readDexFile(true, integrations, dexFileNamer, null, null).classes) {
                         val type = classDef.type
 
-                        val result = classes.findIndexed { it.type == type }
-                        if (result == null) {
+                        val existingClassIndex = this.indexOfFirst { it.type == type }
+                        if (existingClassIndex == -1) {
                             logger.trace("Merging type $type")
-                            classes.add(classDef)
+                            add(classDef)
                             continue
                         }
 
-                        val (existingClass, existingClassIndex) = result
 
                         logger.trace("Type $type exists. Adding missing methods and fields.")
 
-                        existingClass.merge(classDef, context, logger).let { mergedClass ->
-                            if (mergedClass !== existingClass) // referential equality check
-                                classes[existingClassIndex] = mergedClass
+                        get(existingClassIndex).apply {
+                            merge(classDef, context.bytecodeContext, logger).let { mergedClass ->
+                                if (mergedClass !== this) // referential equality check
+                                    set(existingClassIndex, mergedClass)
+                            }
                         }
+
                     }
                 }
             }
