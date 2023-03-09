@@ -35,7 +35,7 @@ class Patcher(private val options: PatcherOptions) {
         // Decode manifest file.
         logger.info("Decoding manifest file of the base apk file")
 
-        options.apkBundle.base.decodeResources(options, Apk.ResourceDecodingMode.MANIFEST_ONLY)
+        // options.apkBundle.base.decodeResources(options, Apk.ResourceDecodingMode.MANIFEST_ONLY)
     }
 
     /**
@@ -156,11 +156,13 @@ class Patcher(private val options: PatcherOptions) {
         }
         if (mergeIntegrations) context.integrations.merge(logger, dexFileNamer)
 
+        logger.info("Decoding bundle resources...")
+        options.apkBundle.emitResources(options, Apk.ResourceDecodingMode.FULL)
+
+        /*
         // Prevent from decoding the manifest twice if it is not needed.
         if (decodingMode == Apk.ResourceDecodingMode.FULL) {
-            options.apkBundle.decodeResources(options, Apk.ResourceDecodingMode.FULL).forEach {
-                logger.info("Decoding resources for $it apk file")
-            }
+
 
             // region Workaround because Androlib does not support split apk files
 
@@ -170,6 +172,7 @@ class Patcher(private val options: PatcherOptions) {
 
             // endregion
         }
+        */
 
         logger.trace("Executing all patches")
 
@@ -194,7 +197,8 @@ class Patcher(private val options: PatcherOptions) {
      *
      * @return The [PatcherResult] of the [Patcher].
      */
-    fun save(): PatcherResult {
+    fun save() {
+        /*
         val patchResults = buildList {
             if (decodingMode == Apk.ResourceDecodingMode.FULL) {
                 logger.info("Writing patched resources")
@@ -213,14 +217,13 @@ class Patcher(private val options: PatcherOptions) {
                     logger.info("Patched resources written for ${writeResult.apk} apk file")
                 }
             }
-        }
+        }*/
+        options.apkBundle.refreshResources(options)
 
         options.apkBundle.base.apply {
             logger.info("Writing patched dex files")
             dexFiles = bytecodeData.writeDexFiles()
         }
-
-        return PatcherResult(patchResults)
     }
 }
 

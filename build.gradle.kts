@@ -18,13 +18,16 @@ repositories {
             password = githubPassword
         }
     }
+    flatDir {
+        dirs("libs")
+    }
 }
 
 dependencies {
     implementation("xpp3:xpp3:1.1.4c")
     implementation("app.revanced:smali:2.5.3-a3836654")
     implementation("app.revanced:multidexlib2:2.5.3-a3836654")
-    implementation("app.revanced:apktool-lib:2.7.0")
+    implementation("com.reandroid.arsclib:ARSCLib")
     implementation(kotlin("reflect"))
 
     compileOnly("com.google.android:android:4.1.1.4")
