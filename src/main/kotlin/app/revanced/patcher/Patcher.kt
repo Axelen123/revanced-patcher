@@ -32,8 +32,9 @@ class Patcher(private val options: PatcherOptions) {
     }
 
     init {
-        logger.info("Decoding bundle resources...")
-        options.apkBundle.emitResources(options, Apk.ResourceDecodingMode.FULL)
+        options.apkBundle.emitResources(options, Apk.ResourceDecodingMode.FULL).forEach {
+            logger.info("Decoding resources for: $it")
+        }
     }
 
     /**
@@ -154,21 +155,6 @@ class Patcher(private val options: PatcherOptions) {
         }
         if (mergeIntegrations) context.integrations.merge(logger, dexFileNamer)
 
-        /*
-        // Prevent from decoding the manifest twice if it is not needed.
-        if (decodingMode == Apk.ResourceDecodingMode.FULL) {
-
-
-            // region Workaround because Androlib does not support split apk files
-
-            options.apkBundle.also {
-                logger.info("Merging split apk resources to base apk resources")
-            }.mergeResources(options)
-
-            // endregion
-        }
-        */
-
         logger.trace("Executing all patches")
 
         HashMap<String, ExecutedPatch>().apply {
@@ -192,12 +178,11 @@ class Patcher(private val options: PatcherOptions) {
      *
      * @return The [PatcherResult] of the [Patcher].
      */
-    fun save() {
-        /*
+    fun save(): PatcherResult {
         val patchResults = buildList {
-            if (decodingMode == Apk.ResourceDecodingMode.FULL) {
+            // if (decodingMode == Apk.ResourceDecodingMode.FULL) {
                 logger.info("Writing patched resources")
-                options.apkBundle.writeResources(options).forEach { writeResult ->
+                options.apkBundle.refreshResources(options).forEach { writeResult ->
                     if (writeResult.exception is Apk.ApkException.Write) return@forEach
 
                     val patch = writeResult.apk.let {
@@ -211,14 +196,15 @@ class Patcher(private val options: PatcherOptions) {
 
                     logger.info("Patched resources written for ${writeResult.apk} apk file")
                 }
-            }
-        }*/
-        options.apkBundle.refreshResources(options)
+            // }
+        }
 
         options.apkBundle.base.apply {
             logger.info("Writing patched dex files")
             dexFiles = bytecodeData.writeDexFiles()
         }
+
+        return PatcherResult(patchResults)
     }
 }
 

@@ -63,7 +63,7 @@ class ResourceContext internal constructor(private val options: PatcherOptions) 
     fun getFile(
         path: String,
         vararg contexts: Apk? = arrayOf(apkBundle.base, apkBundle.split?.asset)
-    ) = apkBundle.getFile(path, options)
+    ) = contexts.firstNotNullOfOrNull { it?.getFile(path, options)?.takeIf(File::exists) }
 
     /**
      * Open an [DomFileEditor] for a given DOM file.

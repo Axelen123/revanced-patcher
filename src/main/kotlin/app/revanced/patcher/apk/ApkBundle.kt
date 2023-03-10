@@ -9,6 +9,9 @@ import com.reandroid.apk.ApkModuleXmlEncoder
 import com.reandroid.archive.ZipAlign
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.util.stream.Collectors
 
 /**
  * An [Apk] file of type [Apk.Split].
@@ -27,33 +30,8 @@ class ApkBundle(
     var split = split
         internal set
 
-    internal var module = if (split == null) base.module else merge()
-
-
     /**
-     * Get the resource directory of the [ApkBundle].
-     *
-     * @param options The patcher context to resolve the resource directory for the [ApkBundle].
-     * @return The resource directory of the [ApkBundle].
-     */
-    protected fun getResourceDirectory(options: PatcherOptions) = options.resourceDirectory.resolve(toString())
-    override fun toString() = "bundle"
-
-    /**
-     * Get a file from the resources of the [ApkBundle].
-     *
-     * @param path The path of the resource file.
-     * @param options The patcher context to resolve the resource directory for the [ApkBundle].
-     * @return A [File] instance for the resource file.
-     */
-    internal fun getFile(path: String, options: PatcherOptions): File? {
-        var resDir = getResourceDirectory(options)
-        if (path.startsWith("res")) resDir = resDir.resolve("0-${base.packageMetadata.packageName}")
-        val f = resDir.resolve(path)
-        return if (!f.exists()) null else f
-    }
-
-    /**
+     * TODO: make this return [Apk]
      * Merge all [Apk.Split] files to [Apk.Base].
      * This will set [split] to null.
      * @param options The [PatcherOptions] to write the resources with.
@@ -77,41 +55,49 @@ class ApkBundle(
     }
 
     /**
-     * Save and zipalign the bundle.
-     * @param out The [File] to write to.
-     */
-    fun save(out: File) {
-        module.writeApk(out)
-        ZipAlign.align4(out)
-    }
-
-    /**
-     * Decode resources for in an [ApkBundle].
-     * Note: This function does not respect the patchers [ResourceDecodingMode] :trolley:.
+     * Refresh updated resources for the files in [ApkBundle].
      *
-     * @param options The [PatcherOptions] to decode the resources with.
-     * @param mode The [ResourceDecodingMode] to use.
+     * @param options The [PatcherOptions] to write the resources with.
+     * @return A sequence of the [Apk] files which resources are being written.
      */
-    internal fun emitResources(options: PatcherOptions, mode: ResourceDecodingMode) {
-        try {
-            ApkModuleXmlDecoder(module).decodeTo(getResourceDirectory(options))
-        } catch (e: Exception) {
-            throw Apk.ApkException.Decode("Failed to decode resources", e)
+    internal fun refreshResources(options: PatcherOptions) = sequence {
+        with(base) {
+            refreshResources(options)
+
+            yield(SplitApkResult.Write(this))
+        }
+
+        split?.all?.forEach { splitApk ->
+            with(splitApk) {
+                var exception: Apk.ApkException.Write? = null
+
+                try {
+                    refreshResources(options)
+                } catch (writeException: Apk.ApkException.Write) {
+                    exception = writeException
+                }
+
+                yield(SplitApkResult.Write(this, exception))
+            }
         }
     }
 
     /**
-     * Refresh updated resources for a [ApkBundle].
+     * Decode resources for the files in [ApkBundle].
      *
-     * @param options The [PatcherOptions] to write the resources with.
+     * @param options The [PatcherOptions] to decode the resources with.
+     * @param mode The [Apk.ResourceDecodingMode] to use.
+     * @return A sequence of the [Apk] files which resources are being decoded.
      */
-    internal fun refreshResources(options: PatcherOptions) {
-        try {
-            val encoder = ApkModuleXmlEncoder()
-            encoder.scanDirectory(getResourceDirectory(options))
-            module = encoder.apkModule
-        } catch (e: Exception) {
-            throw Apk.ApkException.Write("guhh", e)
+    internal fun emitResources(options: PatcherOptions, mode: ResourceDecodingMode) = sequence {
+        with(base) {
+            yield(this)
+            emitResources(options, mode)
+        }
+
+        split?.all?.forEach {
+            yield(it)
+            it.emitResources(options, mode)
         }
     }
 

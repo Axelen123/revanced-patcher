@@ -10,6 +10,7 @@ import app.revanced.patcher.logging.Logger
 import app.revanced.patcher.util.ProxyBackedClassList
 import app.revanced.patcher.util.dex.DexFile
 import app.revanced.patcher.util.dom.DomUtil.doRecursively
+import com.reandroid.apk.ApkBundle
 /*
 import brut.androlib.Androlib
 import brut.androlib.AndrolibException
@@ -31,6 +32,9 @@ import com.reandroid.apk.ApkModule;
 import com.reandroid.apk.ApkModuleXmlDecoder
 import com.reandroid.apk.ApkModuleXmlEncoder
 import com.reandroid.apk.ApkUtil
+import com.reandroid.archive.APKArchive
+import com.reandroid.archive.ZipAlign
+import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
 
 import lanchon.multidexlib2.DexIO
 import lanchon.multidexlib2.MultiDexIO
@@ -59,11 +63,92 @@ sealed class Apk(filePath: String, logger: Logger) {
      */
     internal var module = ApkModule.loadApkFile(file, ApkUtil.toModuleName(file)).also { it.setAPKLogger(logger) }
 
+    init {
+        // delet extractNativeLibs lolxd2
+        if (module.hasAndroidManifestBlock()) {
+            val manifest = module.androidManifestBlock
+            val appElement = manifest.applicationElement.startElement
+            arrayOf(
+                AndroidManifestBlock.ID_isSplitRequired,
+                AndroidManifestBlock.ID_extractNativeLibs
+            ).forEach { id -> appElement.resXmlAttributeArray.remove(appElement.getAttribute(id)) }
+            // TODO: maybe delet signature and vending stuff idk
+            manifest.refresh()
+        }
+    }
+
     /**
-     * The patched resources for the [Apk] given by the [app.revanced.patcher.Patcher].
+     * Get the resource directory of the apk file.
+     *
+     * @param options The patcher context to resolve the resource directory for the [Apk] file.
+     * @return The resource directory of the [Apk] file.
      */
-    var resources: File? = null
-        internal set
+    internal fun getResourceDirectory(options: PatcherOptions) = options.resourceDirectory.resolve(toString())
+
+    /**
+     * Get a file from the resources of the [Apk] file.
+     *
+     * @param path The path of the resource file.
+     * @param options The patcher context to resolve the resource directory for the [Apk] file.
+     * @return A [File] instance for the resource file.
+     */
+    internal fun getFile(path: String, options: PatcherOptions): File? {
+        var resDir = getResourceDirectory(options)
+        if (path.startsWith("res")) resDir = resDir.resolve("0-${packageMetadata.packageName}")
+        val f = resDir.resolve(path)
+        return if (!f.exists()) null else f
+    }
+    /*
+internal fun getFile(path: String, options: PatcherOptions) =
+    getResourceDirectory(options).resolve(path).also { out ->
+        out.createNewFile()
+        if (out.exists()) out else {
+            module.listResFiles().firstNotNullOfOrNull {
+                if (it.filePath != path) null else
+                    if (it.isBinaryXml) module.decodeXMLFile(it.inputSource.name)
+                        .save(out, true) else it.inputSource.write(FileOutputStream(out))
+            }
+        }
+    }
+*/
+
+    /**
+     * @param out The [File] to write to.
+     */
+    open fun save(out: File) {
+        module.writeApk(out)
+        ZipAlign.align4(out)
+    }
+
+    /**
+     * Decode resources for a [Apk].
+     * Note: This function does not respect the patchers [ResourceDecodingMode] :trolley:.
+     *
+     * @param options The [PatcherOptions] to decode the resources with.
+     * @param mode The [ResourceDecodingMode] to use.
+     */
+    internal open fun emitResources(options: PatcherOptions, mode: ResourceDecodingMode) {
+        try {
+            ApkModuleXmlDecoder(module).decodeTo(getResourceDirectory(options))
+        } catch (e: Exception) {
+            throw ApkException.Decode("Failed to decode resources", e)
+        }
+    }
+
+    /**
+     * Refresh updated resources for an [Apk.file].
+     *
+     * @param options The [PatcherOptions] to write the resources with.
+     */
+    internal open fun refreshResources(options: PatcherOptions) {
+        try {
+            val encoder = ApkModuleXmlEncoder()
+            encoder.scanDirectory(getResourceDirectory(options))
+            module = encoder.apkModule
+        } catch (e: Exception) {
+            throw ApkException.Write("Failed to refresh resources: $e", e)
+        }
+    }
 
     /**
      * The metadata of the [Apk].
@@ -77,21 +162,6 @@ sealed class Apk(filePath: String, logger: Logger) {
             packageMetadata.packageVersion = module.androidManifestBlock.versionName
         }
     }
-
-    /*
-    internal fun getFile(path: String, options: PatcherOptions) =
-        getResourceDirectory(options).resolve(path).also { out ->
-            out.createNewFile()
-            if (out.exists()) out else {
-                module.listResFiles().firstNotNullOfOrNull {
-                    if (it.filePath != path) null else
-                        if (it.isBinaryXml) module.decodeXMLFile(it.inputSource.name)
-                            .save(out, true) else it.inputSource.write(FileOutputStream(out))
-                }
-            }
-        }
-    */
-
 
     /**
      * The split apk file that is to be patched.
@@ -117,6 +187,12 @@ sealed class Apk(filePath: String, logger: Logger) {
          */
         class Library(filePath: String, logger: Logger) : Split(filePath, logger) {
             override fun toString() = "library"
+            override fun emitResources(options: PatcherOptions, mode: ResourceDecodingMode) {
+                APKArchive.loadZippedApk(file).extract(getResourceDirectory(options))
+            }
+            override fun refreshResources(options: PatcherOptions) {}
+
+            override fun save(out: File) { file.copyTo(out) }
         }
 
         /**
