@@ -6,6 +6,7 @@ import app.revanced.patcher.DomFileEditor
 import app.revanced.patcher.Patcher
 import app.revanced.patcher.PatcherOptions
 import app.revanced.patcher.extensions.nullOutputStream
+import app.revanced.patcher.logging.Logger
 import app.revanced.patcher.util.ProxyBackedClassList
 import app.revanced.patcher.util.dex.DexFile
 import app.revanced.patcher.util.dom.DomUtil.doRecursively
@@ -29,6 +30,7 @@ import brut.directory.ZipUtils
 import com.reandroid.apk.ApkModule;
 import com.reandroid.apk.ApkModuleXmlDecoder
 import com.reandroid.apk.ApkModuleXmlEncoder
+import com.reandroid.apk.ApkUtil
 
 import lanchon.multidexlib2.DexIO
 import lanchon.multidexlib2.MultiDexIO
@@ -46,7 +48,7 @@ import kotlin.io.path.copyTo
  *
  * @param filePath The path to the apk file.
  */
-sealed class Apk(filePath: String) {
+sealed class Apk(filePath: String, logger: Logger) {
     /**
      * The apk file.
      */
@@ -55,7 +57,7 @@ sealed class Apk(filePath: String) {
     /**
      * ARSCLib Apk module.
      */
-    var module = ApkModule.loadApkFile(file)
+    internal var module = ApkModule.loadApkFile(file, ApkUtil.toModuleName(file)).also { it.setAPKLogger(logger) }
 
     /**
      * The patched resources for the [Apk] given by the [app.revanced.patcher.Patcher].
@@ -67,6 +69,14 @@ sealed class Apk(filePath: String) {
      * The metadata of the [Apk].
      */
     val packageMetadata = PackageMetadata()
+
+    // TODO: put these in the constructor of PackageMetadata instead.
+    init {
+        if (module.hasAndroidManifestBlock() && module.androidManifestBlock.versionName != null) {
+            packageMetadata.packageName = module.androidManifestBlock.packageName
+            packageMetadata.packageVersion = module.androidManifestBlock.versionName
+        }
+    }
 
     /*
     internal fun getFile(path: String, options: PatcherOptions) =
@@ -89,14 +99,14 @@ sealed class Apk(filePath: String) {
      * @param filePath The path to the apk file.
      * @see Apk
      */
-    sealed class Split(filePath: String) : Apk(filePath) {
+    sealed class Split(filePath: String, logger: Logger) : Apk(filePath, logger) {
 
         /**
          * The split apk file which contains language files.
          *
          * @param filePath The path to the apk file.
          */
-        class Language(filePath: String) : Split(filePath) {
+        class Language(filePath: String, logger: Logger) : Split(filePath, logger) {
             override fun toString() = "language"
         }
 
@@ -105,7 +115,7 @@ sealed class Apk(filePath: String) {
          *
          * @param filePath The path to the apk file.
          */
-        class Library(filePath: String) : Split(filePath) {
+        class Library(filePath: String, logger: Logger) : Split(filePath, logger) {
             override fun toString() = "library"
         }
 
@@ -114,7 +124,7 @@ sealed class Apk(filePath: String) {
          *
          * @param filePath The path to the apk file.
          */
-        class Asset(filePath: String) : Split(filePath) {
+        class Asset(filePath: String, logger: Logger) : Split(filePath, logger) {
             override fun toString() = "asset"
         }
     }
@@ -125,7 +135,7 @@ sealed class Apk(filePath: String) {
      * @param filePath The path to the apk file.
      * @see Apk
      */
-    class Base(filePath: String) : Apk(filePath) {
+    class Base(filePath: String, logger: Logger) : Apk(filePath, logger) {
         /**
          * Data of the [Base] apk file.
          */
@@ -140,6 +150,7 @@ sealed class Apk(filePath: String) {
         override fun toString() = "base"
     }
 
+    // TODO: read/write dex files using arsclib
     internal inner class BytecodeData {
         private val opcodes: Opcodes
 

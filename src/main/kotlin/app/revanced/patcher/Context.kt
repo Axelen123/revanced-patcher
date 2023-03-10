@@ -61,9 +61,9 @@ class ResourceContext internal constructor(private val options: PatcherOptions) 
      * @return A [File] instance for the resource file or null if not found in any context.
      */
     fun getFile(
-        path: String
+        path: String,
+        vararg contexts: Apk? = arrayOf(apkBundle.base, apkBundle.split?.asset)
     ) = apkBundle.getFile(path, options)
-
 
     /**
      * Open an [DomFileEditor] for a given DOM file.
@@ -79,7 +79,7 @@ class ResourceContext internal constructor(private val options: PatcherOptions) 
      * @param path The path to the DOM file.
      * @return A [DomFileEditor] instance.
      */
-    fun openEditor(path: String) =
+    fun openEditor(path: String, vararg contexts: Apk? = arrayOf(apkBundle.base, apkBundle.split?.asset)) =
         DomFileEditor(
             this@ResourceContext.getFile(path)
                 ?: throw PatchResult.Error("The file $path can not be found.")

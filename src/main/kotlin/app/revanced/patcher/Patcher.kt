@@ -32,10 +32,8 @@ class Patcher(private val options: PatcherOptions) {
     }
 
     init {
-        // Decode manifest file.
-        logger.info("Decoding manifest file of the base apk file")
-
-        // options.apkBundle.base.decodeResources(options, Apk.ResourceDecodingMode.MANIFEST_ONLY)
+        logger.info("Decoding bundle resources...")
+        options.apkBundle.emitResources(options, Apk.ResourceDecodingMode.FULL)
     }
 
     /**
@@ -155,9 +153,6 @@ class Patcher(private val options: PatcherOptions) {
             }
         }
         if (mergeIntegrations) context.integrations.merge(logger, dexFileNamer)
-
-        logger.info("Decoding bundle resources...")
-        options.apkBundle.emitResources(options, Apk.ResourceDecodingMode.FULL)
 
         /*
         // Prevent from decoding the manifest twice if it is not needed.

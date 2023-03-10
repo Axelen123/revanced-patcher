@@ -2,6 +2,7 @@ package app.revanced.patcher.apk
 
 import app.revanced.patcher.PatcherOptions
 import app.revanced.patcher.apk.Apk.ResourceDecodingMode
+import app.revanced.patcher.logging.Logger
 import com.reandroid.apk.ApkBundle
 import com.reandroid.apk.ApkModuleXmlDecoder
 import com.reandroid.apk.ApkModuleXmlEncoder
@@ -17,7 +18,8 @@ import java.io.File
  */
 class ApkBundle(
     val base: Apk.Base,
-    split: Split? = null
+    split: Split? = null,
+    val logger: Logger
 ) {
     /**
      * The [Apk.Split] files.
@@ -35,6 +37,7 @@ class ApkBundle(
      * @return The resource directory of the [ApkBundle].
      */
     protected fun getResourceDirectory(options: PatcherOptions) = options.resourceDirectory.resolve(toString())
+    override fun toString() = "bundle"
 
     /**
      * Get a file from the resources of the [ApkBundle].
@@ -44,7 +47,9 @@ class ApkBundle(
      * @return A [File] instance for the resource file.
      */
     internal fun getFile(path: String, options: PatcherOptions): File? {
-        val f = getResourceDirectory(options).resolve(path)
+        var resDir = getResourceDirectory(options)
+        if (path.startsWith("res")) resDir = resDir.resolve("0-${base.packageMetadata.packageName}")
+        val f = resDir.resolve(path)
         return if (!f.exists()) null else f
     }
 
@@ -54,6 +59,7 @@ class ApkBundle(
      * @param options The [PatcherOptions] to write the resources with.
      */
     private fun merge() = ApkBundle().apply {
+        setAPKLogger(logger)
         addModule(base.module)
         split?.all?.forEach { addModule(it.module) }
     }.mergeModules().also {
