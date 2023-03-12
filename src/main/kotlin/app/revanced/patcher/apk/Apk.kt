@@ -33,7 +33,9 @@ import com.reandroid.apk.ApkModuleXmlDecoder
 import com.reandroid.apk.ApkModuleXmlEncoder
 import com.reandroid.apk.ApkUtil
 import com.reandroid.archive.APKArchive
+import com.reandroid.archive.ByteInputSource
 import com.reandroid.archive.ZipAlign
+import com.reandroid.archive.ZipArchive
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
 
 import lanchon.multidexlib2.DexIO
@@ -63,20 +65,6 @@ sealed class Apk(filePath: String, logger: Logger) {
      */
     internal var module = ApkModule.loadApkFile(file, ApkUtil.toModuleName(file)).also { it.setAPKLogger(logger) }
 
-    init {
-        // delet extractNativeLibs lolxd2
-        if (module.hasAndroidManifestBlock()) {
-            val manifest = module.androidManifestBlock
-            val appElement = manifest.applicationElement.startElement
-            arrayOf(
-                AndroidManifestBlock.ID_isSplitRequired,
-                AndroidManifestBlock.ID_extractNativeLibs
-            ).forEach { id -> appElement.resXmlAttributeArray.remove(appElement.getAttribute(id)) }
-            // TODO: maybe delet signature and vending stuff idk
-            manifest.refresh()
-        }
-    }
-
     /**
      * Get the resource directory of the apk file.
      *
@@ -93,10 +81,7 @@ sealed class Apk(filePath: String, logger: Logger) {
      * @return A [File] instance for the resource file.
      */
     internal fun getFile(path: String, options: PatcherOptions): File? {
-        var resDir = getResourceDirectory(options)
-        if (path.startsWith("res")) resDir = resDir.resolve("0-${packageMetadata.packageName}")
-        val f = resDir.resolve(path)
-        return if (!f.exists()) null else f
+        throw Error("getFile() is not implemented.")
     }
     /*
 internal fun getFile(path: String, options: PatcherOptions) =
@@ -111,6 +96,10 @@ internal fun getFile(path: String, options: PatcherOptions) =
         }
     }
 */
+
+    internal fun editResXml(): DomFileEditor {
+        throw Error("not implmented")
+    }
 
     /**
      * @param out The [File] to write to.
@@ -128,11 +117,13 @@ internal fun getFile(path: String, options: PatcherOptions) =
      * @param mode The [ResourceDecodingMode] to use.
      */
     internal open fun emitResources(options: PatcherOptions, mode: ResourceDecodingMode) {
+        /*
         try {
             ApkModuleXmlDecoder(module).decodeTo(getResourceDirectory(options))
         } catch (e: Exception) {
             throw ApkException.Decode("Failed to decode resources", e)
         }
+         */
     }
 
     /**
@@ -141,6 +132,7 @@ internal fun getFile(path: String, options: PatcherOptions) =
      * @param options The [PatcherOptions] to write the resources with.
      */
     internal open fun refreshResources(options: PatcherOptions) {
+        /*
         try {
             val encoder = ApkModuleXmlEncoder()
             encoder.scanDirectory(getResourceDirectory(options))
@@ -148,6 +140,7 @@ internal fun getFile(path: String, options: PatcherOptions) =
         } catch (e: Exception) {
             throw ApkException.Write("Failed to refresh resources: $e", e)
         }
+         */
     }
 
     /**
@@ -216,17 +209,9 @@ internal fun getFile(path: String, options: PatcherOptions) =
          * Data of the [Base] apk file.
          */
         internal val bytecodeData = BytecodeData()
-
-        /**
-         * The patched dex files for the [Base] apk file.
-         */
-        lateinit var dexFiles: List<DexFile>
-            internal set
-
         override fun toString() = "base"
     }
 
-    // TODO: read/write dex files using arsclib
     internal inner class BytecodeData {
         private val opcodes: Opcodes
 
@@ -240,17 +225,17 @@ internal fun getFile(path: String, options: PatcherOptions) =
         )
 
         /**
-         * Write [classes] to [DexFile]s.
+         * Write [classes] to the [APKArchive].
          *
-         * @return The [DexFile]s.
+         * @param archive The [APKArchive] to write to.
          */
-        internal fun writeDexFiles(): List<DexFile> {
+        internal fun writeDexFiles(archive: APKArchive) {
             // Make sure to replace all classes with their proxy.
             val classes = classes.also(ProxyBackedClassList::applyProxies)
             val opcodes = opcodes
 
             // Create patched dex files.
-            return mutableMapOf<String, MemoryDataStore>().also {
+            mutableMapOf<String, MemoryDataStore>().also {
                 val newDexFile = object : org.jf.dexlib2.iface.DexFile {
                     override fun getClasses() = classes.toSet()
                     override fun getOpcodes() = opcodes
@@ -262,7 +247,7 @@ internal fun getFile(path: String, options: PatcherOptions) =
                     it, Patcher.dexFileNamer, newDexFile, DexIO.DEFAULT_MAX_DEX_POOL_SIZE, null
                 )
             }.map {
-                DexFile(it.key, it.value.readAt(0))
+                archive.add(ByteInputSource(it.value.readAt(0).use { stream -> stream.readAllBytes() }, it.key))
             }
         }
     }

@@ -7,6 +7,7 @@ import app.revanced.patcher.extensions.PatchExtensions.requiresIntegrations
 import app.revanced.patcher.fingerprint.method.impl.MethodFingerprint.Companion.resolve
 import app.revanced.patcher.patch.*
 import app.revanced.patcher.util.VersionReader
+import com.reandroid.archive.ByteInputSource
 import lanchon.multidexlib2.BasicDexFileNamer
 import java.io.File
 
@@ -201,7 +202,7 @@ class Patcher(private val options: PatcherOptions) {
 
         options.apkBundle.base.apply {
             logger.info("Writing patched dex files")
-            dexFiles = bytecodeData.writeDexFiles()
+            bytecodeData.writeDexFiles(module.apkArchive)
         }
 
         return PatcherResult(patchResults)
