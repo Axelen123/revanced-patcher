@@ -14,7 +14,7 @@ interface Logger : APKLogger {
         }
     }
     override fun logMessage(msg: String?) = info("[ARSCLIB Info] ${msg}")
-    override fun logVerbose(msg: String?) = trace("[ARSCLIB Trace] ${msg}")
+    override fun logVerbose(msg: String?) = info("[ARSCLIB Trace] ${msg}")
 
     object Nop : Logger
 }

@@ -2,9 +2,11 @@ package app.revanced.patcher.apk
 
 import app.revanced.patcher.util.InMemoryChannel
 import com.reandroid.apk.ApkModule
+import com.reandroid.apk.ResourceIds
 import com.reandroid.apk.xmlencoder.EncodeMaterials
 import com.reandroid.apk.xmlencoder.XMLEncodeSource
 import com.reandroid.archive.ByteInputSource
+import com.reandroid.archive.InputSource
 import com.reandroid.arsc.chunk.xml.ResXmlDocument
 import com.reandroid.common.Frameworks
 import com.reandroid.common.TableEntryStore
@@ -13,6 +15,7 @@ import com.reandroid.xml.source.XMLDocumentSource
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.IOException
 import java.net.URI
 import java.nio.ByteBuffer
 import java.nio.channels.SeekableByteChannel
@@ -22,6 +25,7 @@ import java.nio.file.attribute.FileAttribute
 import java.nio.file.attribute.FileAttributeView
 import java.nio.file.attribute.FileStoreAttributeView
 import java.nio.file.spi.FileSystemProvider
+import kotlin.io.path.writeBytes
 
 fun unimplemented(): Nothing = throw Error("Not implemented.")
 
@@ -73,6 +77,12 @@ class ARSCPath(internal val fs: ApkFileSystem, internal val filePath: String) : 
     override fun toRealPath(vararg opts: LinkOption?) = null
     // endregion
 
+    fun exists() = when (kind) {
+        PathKind.TABLE -> true
+        PathKind.ARCHIVE -> fs.apk.module.apkArchive.getInputSource(filePath) != null
+        PathKind.VALUE -> unimplemented()
+    }
+
     internal val kind
         get() = when {
             filePath == "res/values/public.xml" -> PathKind.TABLE
@@ -95,6 +105,18 @@ class ApkFileStore(private val apk: Apk) : FileStore() {
 }
 
 class ApkFileSystem(private val provider: ApkBundleFileSystemProvider, internal val apk: Apk) : FileSystem() {
+    internal val entryStore = TableEntryStore().apply {
+        add(Frameworks.getAndroid())
+        add(apk.module.tableBlock)
+    }
+    internal val encodeMaterials = EncodeMaterials().apply {
+        setAPKLogger(apk.logger)
+        val resIds = ResourceIds()
+        resIds.loadTableBlock(apk.module.tableBlock)
+        addPackageIds(resIds.table.listPackages()[0])
+        addFramework(Frameworks.getAndroid())
+    }
+
     override fun close() {}
     override fun provider() = provider
     override fun isOpen() = true
@@ -117,17 +139,26 @@ fun Path.assertARSC(): ARSCPath {
 }
 
 class ApkBundleFileSystemProvider(internal val bundle: ApkBundle) : FileSystemProvider() {
+    private fun fsFromApk(apk: Apk?): ApkFileSystem? {
+        if (apk == null) {
+            return null
+        }
+        return ApkFileSystem(this, apk)
+    }
+
+    private val base = fsFromApk(bundle.base)
+    private val language = fsFromApk(bundle.split?.language)
+    private val asset = fsFromApk(bundle.split?.asset)
+    private val library = fsFromApk(bundle.split?.library)
     override fun getScheme() = "apk"
     override fun newFileSystem(uri: URI, env: MutableMap<String, *>?) = getFileSystem(uri)
-    override fun getFileSystem(uri: URI) = ApkFileSystem(
-        this,
-        when (uri.path) {
-            "language" -> bundle.split?.language
-            "asset" -> bundle.split?.asset
-            "library" -> bundle.split?.library
-            else -> null
-        } ?: bundle.base
-    )
+    override fun getFileSystem(uri: URI) = when (uri.host) {
+        "base" -> base
+        "language" -> language
+        "asset" -> asset
+        "library" -> library
+        else -> throw Error("Invalid Apk URI: $uri")
+    }
 
     override fun getPath(uri: URI) = unimplemented()
     override fun newByteChannel(
@@ -137,7 +168,7 @@ class ApkBundleFileSystemProvider(internal val bundle: ApkBundle) : FileSystemPr
     ): SeekableByteChannel {
         val path = path.assertARSC()
         return when (path.kind) {
-            PathKind.ARCHIVE -> ArchiveChannel(path.filePath, path.fs.apk.module)
+            PathKind.ARCHIVE -> ArchiveChannel(path.filePath, path.fs, opts)
             else -> unimplemented()
         }
     }
@@ -146,7 +177,12 @@ class ApkBundleFileSystemProvider(internal val bundle: ApkBundle) : FileSystemPr
     override fun createDirectory(dir: Path, vararg attrs: FileAttribute<*>) {
         dir.assertARSC().apply {
             when (kind) {
-                PathKind.ARCHIVE -> fs.apk.module.apkArchive.add(ByteInputSource(ByteArray(0), dir.toString())) // TODO: test if this actually works (maybe ensure the path ends with "/"?)
+                PathKind.ARCHIVE -> fs.apk.module.apkArchive.add(
+                    ByteInputSource(
+                        ByteArray(0),
+                        dir.toString()
+                    )
+                ) // TODO: test if this actually works (maybe ensure the path ends with "/"?)
                 else -> unimplemented()
             }
         }
@@ -162,8 +198,12 @@ class ApkBundleFileSystemProvider(internal val bundle: ApkBundle) : FileSystemPr
         }
     }
 
-    override fun copy(a: Path, b: Path, vararg opts: CopyOption?) = unimplemented()
-    override fun move(a: Path, b: Path, vararg opts: CopyOption?) = unimplemented()
+    override fun copy(a: Path, b: Path, vararg opts: CopyOption) = Files.createFile(b).writeBytes(Files.readAllBytes(a))
+    override fun move(a: Path, b: Path, vararg opts: CopyOption) {
+        copy(a, b, *opts)
+        Files.delete(a)
+    }
+
     override fun isSameFile(a: Path, b: Path) = a == b
     override fun isHidden(path: Path) = false
     override fun getFileStore(path: Path) = path.assertARSC().fs.fileStores[0]
@@ -183,7 +223,78 @@ class ApkBundleFileSystemProvider(internal val bundle: ApkBundle) : FileSystemPr
 
 // TODO: deal with res/values/public.xml and everything in res/values* because they are not real
 
-// TODO: deal with open options...
+/**
+ * Represents a generic file that will only be re-encoded if changed.
+ */
+sealed class ApkChannel(internal val path: String, internal val fs: ApkFileSystem, openOpts: Set<OpenOption>) :
+    InMemoryChannel() {
+    internal var changed = false
+
+    // TODO: figure out why read() doesn't work...
+    init {
+        fs.apk.logger.info("OPENING: $path")
+        if (!openOpts.contains(StandardOpenOption.TRUNCATE_EXISTING)) {
+            write(decode())
+            if (path == "AndroidManifest.xml") {
+                File("/tmp/manifest.xml").writeBytes(contents)
+            }
+            changed = false
+            if (!openOpts.contains(StandardOpenOption.APPEND)) {
+                position(0L)
+            }
+        }
+    }
+
+    abstract fun decode(): ByteBuffer
+    abstract fun encode()
+    override fun write(source: ByteBuffer) = super.write(source).also {
+        changed = true
+    }
+
+    override fun close() {
+        super.close()
+        if (changed) {
+            encode()
+        }
+    }
+}
+
+class ArchiveChannel(path: String, fs: ApkFileSystem, openOpts: Set<OpenOption>) : ApkChannel(path, fs, openOpts) {
+    private val isBinaryXml get() = path.endsWith(".xml") // TODO: figure out why tf get() is needed.
+    override fun decode(): ByteBuffer {
+        val inputSrc = fs.apk.module.apkArchive.getInputSource(path)
+        fs.apk.logger.info("is binary XML: $isBinaryXml, $path, ${path.endsWith(".xml")}")
+        return ByteBuffer.wrap(if (isBinaryXml) {
+            // Decode resource XML
+            val resDoc = ResXmlDocument()
+            // resDoc.setApkFile(...)
+            inputSrc.openStream().use { resDoc.readBytes(it) }
+
+            val packageBlock = fs.apk.module.listResFiles().find { it.filePath == path }?.pickOne()?.packageBlock
+                ?: fs.apk.module.tableBlock.packageArray.pickOne()
+            // Convert it to normal XML
+            val xmlDoc = resDoc.decodeToXml(
+                fs.entryStore,
+                packageBlock.id
+            )
+
+            ByteArrayOutputStream(512 * 1024).apply { xmlDoc.save(this, false) }.toByteArray()
+        } else inputSrc.openStream().use { it.readAllBytes() })
+    }
+
+    override fun encode() {
+        fs.apk.module.apkArchive.add(
+            if (!isBinaryXml) ByteInputSource(contents, path) else {
+                XMLEncodeSource(
+                    fs.encodeMaterials,
+                    XMLDocumentSource(path, XMLDocument.load(ByteArrayInputStream(contents)))
+                )
+            }
+        )
+    }
+}
+
+/*
 class ArchiveChannel(internal val path: String, private val module: ApkModule) : InMemoryChannel() {
     /*
     fun isDirectory() = path.endsWith('/')
@@ -206,9 +317,7 @@ class ArchiveChannel(internal val path: String, private val module: ApkModule) :
             inputSrc.openStream().use { resDoc.readBytes(it) }
 
             // Convert it to normal XML
-            val entryStore = TableEntryStore()
-            entryStore.add(Frameworks.getAndroid())
-            entryStore.add(module.tableBlock)
+
             val xmlDoc = resDoc.decodeToXml(
                 entryStore,
                 module.listResFiles().find { it.filePath == path }!!.pickOne().packageBlock.id
@@ -283,4 +392,4 @@ class ArchiveChannel(internal val path: String, private val module: ApkModule) :
     }
      */
 
-}
+}*/

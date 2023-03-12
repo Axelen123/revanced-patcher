@@ -1,10 +1,11 @@
 package app.revanced.patcher
 
+import app.revanced.patcher.apk.ARSCPath
 import app.revanced.patcher.apk.Apk
 import app.revanced.patcher.apk.ApkBundle
+import app.revanced.patcher.apk.ApkBundleFileSystemProvider
 import app.revanced.patcher.patch.PatchResult
 import app.revanced.patcher.util.method.MethodWalker
-import com.reandroid.arsc.chunk.xml.ResXmlDocument
 import org.jf.dexlib2.iface.Method
 import org.w3c.dom.Document
 import java.io.ByteArrayInputStream
@@ -13,10 +14,15 @@ import java.io.Closeable
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
+import java.net.URI
+import java.nio.file.Files
+import java.nio.file.Path
 import javax.xml.parsers.DocumentBuilderFactory
 import javax.xml.transform.TransformerFactory
 import javax.xml.transform.dom.DOMSource
 import javax.xml.transform.stream.StreamResult
+import kotlin.io.path.inputStream
+import kotlin.io.path.outputStream
 
 /**
  * A common interface to constrain [Context] to [BytecodeContext] and [ResourceContext].
@@ -57,8 +63,10 @@ class ResourceContext internal constructor(private val options: PatcherOptions) 
      */
     val apkBundle = options.apkBundle
 
+    val fsProvider = ApkBundleFileSystemProvider(apkBundle)
+
     /**
-     * Get a file from the resources from the [ApkBundle].
+     * Get a file from the resources from the [Apk].
      *
      * @param path The path of the resource file.
      * @return A [File] instance for the resource file or null if not found in any context.
@@ -66,7 +74,20 @@ class ResourceContext internal constructor(private val options: PatcherOptions) 
     fun getFile(
         path: String,
         vararg contexts: Apk? = arrayOf(apkBundle.base, apkBundle.split?.asset)
-    ) = contexts.firstNotNullOfOrNull { it?.getFile(path, options)?.takeIf(File::exists) }
+    ): File? = throw Error("getFile() is unsupported. Use getPath() instead.")
+
+    /**
+     * Get a path from the resources from the [Apk].
+     *
+     * @param path The path of the resource file.
+     * @return A [Path] instance for the resource file or null if not found in any context.
+     */
+    fun getPath(
+        path: String,
+        vararg contexts: Apk? = arrayOf(apkBundle.base, apkBundle.split?.asset)
+    ) = contexts.firstNotNullOfOrNull {
+        fsProvider.getFileSystem(URI("apk://$it"))?.getPath(path)?.takeIf(ARSCPath::exists)
+    }
 
     /**
      * Open an [DomFileEditor] for a given DOM file.
@@ -74,7 +95,7 @@ class ResourceContext internal constructor(private val options: PatcherOptions) 
      * @param inputStream The input stream to read the DOM file from.
      * @return A [DomFileEditor] instance.
      */
-    fun openEditor(inputStream: InputStream): DomFileEditor = throw PatchResult.Error("delet this")
+    fun openEditor(inputStream: InputStream) = DomFileEditor(inputStream)
 
     /**
      * Open an [DomFileEditor] for a given DOM file.
@@ -82,7 +103,8 @@ class ResourceContext internal constructor(private val options: PatcherOptions) 
      * @param path The path to the DOM file.
      * @return A [DomFileEditor] instance.
      */
-    fun openEditor(path: String, vararg contexts: Apk? = arrayOf(apkBundle.base, apkBundle.split?.asset)) = contexts.firstNotNullOfOrNull { it?.editResXml() }
+    fun openEditor(path: String, vararg contexts: Apk? = arrayOf(apkBundle.base, apkBundle.split?.asset)) =
+        DomFileEditor(getPath(path, *contexts) ?: throw PatchResult.Error("The file $path can not be found."))
 }
 
 /**
@@ -95,7 +117,10 @@ class ResourceContext internal constructor(private val options: PatcherOptions) 
  * @param outputStream the output stream to write the xml file to. If null, the file will be read only.
  *
  */
-class DomFileEditor : Closeable {
+class DomFileEditor internal constructor(
+    private val inputStream: InputStream,
+    private val outputStream: Lazy<OutputStream>? = null,
+) : Closeable {
     // Path to the xml file to unlock the resource when closing the editor.
     private var filePath: String? = null
     private var closed: Boolean = false
@@ -103,23 +128,17 @@ class DomFileEditor : Closeable {
     /**
      * The document of the xml file.
      */
-    lateinit var file: Document
-    val resXmlDocument = ResXmlDocument()
+    val file: Document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(inputStream)
+        .also(Document::normalize)
 
 
     // Lazily open an output stream.
     // This is required because when constructing a DomFileEditor the output stream is created along with the input stream, which is not allowed.
     // The workaround is to lazily create the output stream. This way it would be used after the input stream is closed, which happens in the constructor.
-    internal constructor(path: String, context: Apk) {
+    internal constructor(path: Path) : this(path.inputStream(), lazy { path.outputStream() }) {
         // Increase the lock.
-        locks.merge(path, 1, Integer::sum)
-        filePath = path
-
-        val buf = ByteArrayOutputStream(512 * 1024)
-        // resXmlDocument
-        context.module.decodeXMLFile(path).save(buf, false)
-        DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(ByteArrayInputStream(buf.toByteArray()))
-            .also(Document::normalize)
+        locks.merge(path.toString(), 1, Integer::sum)
+        filePath = path.toString()
     }
 
     /**
@@ -130,7 +149,8 @@ class DomFileEditor : Closeable {
     override fun close() {
         if (closed) return
 
-        /*
+        inputStream.close()
+
         // If the output stream is not null, do not close it.
         outputStream?.let {
             // Prevent writing to same file, if it is being locked
@@ -152,7 +172,7 @@ class DomFileEditor : Closeable {
                 it.value.close()
                 return
             }
-        }*/
+        }
 
         closed = true
     }

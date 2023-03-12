@@ -54,7 +54,7 @@ import kotlin.io.path.copyTo
  *
  * @param filePath The path to the apk file.
  */
-sealed class Apk(filePath: String, logger: Logger) {
+sealed class Apk(filePath: String, internal val logger: Logger) {
     /**
      * The apk file.
      */
@@ -73,16 +73,6 @@ sealed class Apk(filePath: String, logger: Logger) {
      */
     internal fun getResourceDirectory(options: PatcherOptions) = options.resourceDirectory.resolve(toString())
 
-    /**
-     * Get a file from the resources of the [Apk] file.
-     *
-     * @param path The path of the resource file.
-     * @param options The patcher context to resolve the resource directory for the [Apk] file.
-     * @return A [File] instance for the resource file.
-     */
-    internal fun getFile(path: String, options: PatcherOptions): File? {
-        throw Error("getFile() is not implemented.")
-    }
     /*
 internal fun getFile(path: String, options: PatcherOptions) =
     getResourceDirectory(options).resolve(path).also { out ->
@@ -96,10 +86,6 @@ internal fun getFile(path: String, options: PatcherOptions) =
         }
     }
 */
-
-    internal fun editResXml(): DomFileEditor {
-        throw Error("not implmented")
-    }
 
     /**
      * @param out The [File] to write to.
