@@ -2,41 +2,19 @@
 
 package app.revanced.patcher.apk
 
-import app.revanced.patcher.DomFileEditor
 import app.revanced.patcher.Patcher
 import app.revanced.patcher.PatcherOptions
-import app.revanced.patcher.extensions.nullOutputStream
 import app.revanced.patcher.logging.Logger
+import app.revanced.patcher.patch.PatchResult
 import app.revanced.patcher.util.ProxyBackedClassList
-import app.revanced.patcher.util.dex.DexFile
-import app.revanced.patcher.util.dom.DomUtil.doRecursively
-import com.reandroid.apk.ApkBundle
-/*
-import brut.androlib.Androlib
-import brut.androlib.AndrolibException
-import brut.androlib.ApkDecoder
-import brut.androlib.meta.MetaInfo
-import brut.androlib.meta.UsesFramework
-import brut.androlib.options.BuildOptions
-import brut.androlib.res.AndrolibResources
-import brut.androlib.res.data.ResPackage
-import brut.androlib.res.data.ResTable
-import brut.androlib.res.decoder.AXmlResourceParser
-import brut.androlib.res.decoder.ResAttrDecoder
-import brut.androlib.res.decoder.XmlPullStreamDecoder
-import brut.androlib.res.xml.ResXmlPatcher
-import brut.directory.ExtFile
-import brut.directory.ZipUtils
- */
-import com.reandroid.apk.ApkModule;
-import com.reandroid.apk.ApkModuleXmlDecoder
-import com.reandroid.apk.ApkModuleXmlEncoder
-import com.reandroid.apk.ApkUtil
+import com.reandroid.apk.*
+import com.reandroid.apk.xmlencoder.EncodeMaterials
 import com.reandroid.archive.APKArchive
 import com.reandroid.archive.ByteInputSource
 import com.reandroid.archive.ZipAlign
-import com.reandroid.archive.ZipArchive
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
+import com.reandroid.common.Frameworks
+import com.reandroid.common.TableEntryStore
 
 import lanchon.multidexlib2.DexIO
 import lanchon.multidexlib2.MultiDexIO
@@ -44,10 +22,6 @@ import org.jf.dexlib2.Opcodes
 import org.jf.dexlib2.writer.io.MemoryDataStore
 import org.w3c.dom.*
 import java.io.File
-import java.io.FileOutputStream
-import java.nio.file.FileSystems
-import java.nio.file.Files
-import kotlin.io.path.copyTo
 
 /**
  * The apk file that is to be patched.
@@ -65,6 +39,37 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
      */
     internal var module = ApkModule.loadApkFile(file, ApkUtil.toModuleName(file)).also { it.setAPKLogger(logger) }
 
+    // Workaround for some apps (YouTube Music refuses to install without this).
+    init {
+        if (module.hasAndroidManifestBlock()) {
+            val manifest = module.androidManifestBlock
+            val appElement = manifest.applicationElement.startElement
+            appElement.resXmlAttributeArray.remove(appElement.getAttribute(AndroidManifestBlock.ID_extractNativeLibs))
+            manifest.refresh()
+        }
+    }
+    /**
+     * EntryStore for decoding.
+     */
+    internal val entryStore = TableEntryStore().apply {
+        add(Frameworks.getAndroid())
+        add(module.tableBlock)
+    }
+
+    /**
+     * EncodeMaterials for encoding.
+     */
+    internal val encodeMaterials = EncodeMaterials.create(module.tableBlock)
+
+    /**
+     * Open a [app.revanced.patcher.apk.File]
+     */
+    fun openFile(path: String) = File(when {
+        // path == "res/values/public.xml" -> ResourceTableCoder(...)
+        path.startsWith("res/values") -> throw PatchResult.Error("res/values is an illusion!")
+        else -> ArchiveCoder(path, this)
+    })
+
     /**
      * Get the resource directory of the apk file.
      *
@@ -72,20 +77,6 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
      * @return The resource directory of the [Apk] file.
      */
     internal fun getResourceDirectory(options: PatcherOptions) = options.resourceDirectory.resolve(toString())
-
-    /*
-internal fun getFile(path: String, options: PatcherOptions) =
-    getResourceDirectory(options).resolve(path).also { out ->
-        out.createNewFile()
-        if (out.exists()) out else {
-            module.listResFiles().firstNotNullOfOrNull {
-                if (it.filePath != path) null else
-                    if (it.isBinaryXml) module.decodeXMLFile(it.inputSource.name)
-                        .save(out, true) else it.inputSource.write(FileOutputStream(out))
-            }
-        }
-    }
-*/
 
     /**
      * @param out The [File] to write to.

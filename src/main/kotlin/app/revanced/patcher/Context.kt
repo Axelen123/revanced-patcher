@@ -1,28 +1,20 @@
 package app.revanced.patcher
 
-import app.revanced.patcher.apk.ARSCPath
 import app.revanced.patcher.apk.Apk
 import app.revanced.patcher.apk.ApkBundle
-import app.revanced.patcher.apk.ApkBundleFileSystemProvider
 import app.revanced.patcher.patch.PatchResult
 import app.revanced.patcher.util.method.MethodWalker
 import org.jf.dexlib2.iface.Method
 import org.w3c.dom.Document
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
-import java.net.URI
-import java.nio.file.Files
 import java.nio.file.Path
 import javax.xml.parsers.DocumentBuilderFactory
 import javax.xml.transform.TransformerFactory
 import javax.xml.transform.dom.DOMSource
 import javax.xml.transform.stream.StreamResult
-import kotlin.io.path.inputStream
-import kotlin.io.path.outputStream
 
 /**
  * A common interface to constrain [Context] to [BytecodeContext] and [ResourceContext].
@@ -63,8 +55,6 @@ class ResourceContext internal constructor(private val options: PatcherOptions) 
      */
     val apkBundle = options.apkBundle
 
-    val fsProvider = ApkBundleFileSystemProvider(apkBundle)
-
     /**
      * Get a file from the resources from the [Apk].
      *
@@ -76,18 +66,13 @@ class ResourceContext internal constructor(private val options: PatcherOptions) 
         vararg contexts: Apk? = arrayOf(apkBundle.base, apkBundle.split?.asset)
     ): File? = throw Error("getFile() is unsupported. Use getPath() instead.")
 
-    /**
-     * Get a path from the resources from the [Apk].
-     *
-     * @param path The path of the resource file.
-     * @return A [Path] instance for the resource file or null if not found in any context.
-     */
     fun getPath(
         path: String,
         vararg contexts: Apk? = arrayOf(apkBundle.base, apkBundle.split?.asset)
-    ) = contexts.firstNotNullOfOrNull {
-        fsProvider.getFileSystem(URI("apk://$it"))?.getPath(path)?.takeIf(ARSCPath::exists)
-    }
+    ): Path = throw Error("dead")
+
+    fun openFile(path: String, vararg contexts: Apk? = arrayOf(apkBundle.base, apkBundle.split?.asset)) =
+        contexts.firstNotNullOfOrNull { it?.openFile(path)?.takeIf { it.exists } }
 
     /**
      * Open an [DomFileEditor] for a given DOM file.
@@ -104,7 +89,7 @@ class ResourceContext internal constructor(private val options: PatcherOptions) 
      * @return A [DomFileEditor] instance.
      */
     fun openEditor(path: String, vararg contexts: Apk? = arrayOf(apkBundle.base, apkBundle.split?.asset)) =
-        DomFileEditor(getPath(path, *contexts) ?: throw PatchResult.Error("The file $path can not be found."))
+        DomFileEditor(openFile(path, *contexts) ?: throw PatchResult.Error("The file $path can not be found."))
 }
 
 /**
@@ -135,10 +120,10 @@ class DomFileEditor internal constructor(
     // Lazily open an output stream.
     // This is required because when constructing a DomFileEditor the output stream is created along with the input stream, which is not allowed.
     // The workaround is to lazily create the output stream. This way it would be used after the input stream is closed, which happens in the constructor.
-    internal constructor(path: Path) : this(path.inputStream(), lazy { path.outputStream() }) {
+    internal constructor(file: app.revanced.patcher.apk.File) : this(file.inputStream(), lazy { file.outputStream() }) {
         // Increase the lock.
-        locks.merge(path.toString(), 1, Integer::sum)
-        filePath = path.toString()
+        locks.merge(file.toString(), 1, Integer::sum)
+        filePath = file.toString()
     }
 
     /**
