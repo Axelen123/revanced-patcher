@@ -40,7 +40,6 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
     internal var module = ApkModule.loadApkFile(file, ApkUtil.toModuleName(file)).also { it.setAPKLogger(logger) }
 
 
-
     /**
      * The metadata of the [Apk].
      */
@@ -89,6 +88,7 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
 
     /**
      * A map of resource files from their actual name to their archive name.
+     * Example: res/drawable-hdpi/icon.png -> res/4a.png
      */
     internal val resFileTable = module.listResFiles().associateBy { "res/${it.buildPath()}" }
     // internal fun getEntry(type: String, name: String): Entry? = typeTable[type]?.entryArray?.listItems()?.find { it.name == name }
@@ -96,11 +96,17 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
     /**
      * Open a [app.revanced.patcher.apk.File]
      */
-    fun openFile(path: String) = File(when {
-        path == "res/values/public.xml" -> throw ApkException.Encode("Editing the resource table is not supported.")
-        path.startsWith("res/values") -> ValuesCoder(typeTable[path.removePrefix("res/").removeSuffix(".xml")], path, this)
-        else -> ArchiveCoder(path, this)
-    })
+    fun openFile(path: String) = File(
+        path, logger, when {
+            path == "res/values/public.xml" -> throw ApkException.Encode("Editing the resource table is not supported.")
+            path.startsWith("res/values") -> ValuesCoder(
+                typeTable[path.removePrefix("res/").removeSuffix(".xml")],
+                this
+            )
+
+            else -> ArchiveCoder(path, this)
+        }
+    )
 
     /**
      * Get the resource directory of the apk file.
@@ -179,9 +185,12 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
             override fun emitResources(options: PatcherOptions, mode: ResourceDecodingMode) {
                 APKArchive.loadZippedApk(file).extract(getResourceDirectory(options))
             }
+
             override fun refreshResources(options: PatcherOptions) {}
 
-            override fun save(out: File) { file.copyTo(out) }
+            override fun save(out: File) {
+                file.copyTo(out)
+            }
         }
 
         /**

@@ -105,6 +105,7 @@ class ResourceContext internal constructor(private val options: PatcherOptions) 
 class DomFileEditor internal constructor(
     private val inputStream: InputStream,
     private val outputStream: Lazy<OutputStream>? = null,
+    private val onClose: (() -> Unit)? = null,
 ) : Closeable {
     // Path to the xml file to unlock the resource when closing the editor.
     private var filePath: String? = null
@@ -120,7 +121,10 @@ class DomFileEditor internal constructor(
     // Lazily open an output stream.
     // This is required because when constructing a DomFileEditor the output stream is created along with the input stream, which is not allowed.
     // The workaround is to lazily create the output stream. This way it would be used after the input stream is closed, which happens in the constructor.
-    internal constructor(file: app.revanced.patcher.apk.File) : this(file.inputStream(), lazy { file.outputStream() }) {
+    internal constructor(file: app.revanced.patcher.apk.File) : this(
+        file.inputStream(),
+        lazy { file.outputStream() },
+        { file.close() }) {
         // Increase the lock.
         locks.merge(file.toString(), 1, Integer::sum)
         filePath = file.toString()
@@ -158,7 +162,7 @@ class DomFileEditor internal constructor(
                 return
             }
         }
-
+        onClose?.invoke()
         closed = true
     }
 
