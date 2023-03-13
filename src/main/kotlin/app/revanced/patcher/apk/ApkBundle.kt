@@ -69,11 +69,11 @@ class ApkBundle(
 
         split?.all?.forEach { splitApk ->
             with(splitApk) {
-                var exception: Apk.ApkException.Write? = null
+                var exception: Apk.ApkException.Encode? = null
 
                 try {
                     refreshResources(options)
-                } catch (writeException: Apk.ApkException.Write) {
+                } catch (writeException: Apk.ApkException.Encode) {
                     exception = writeException
                 }
 
@@ -136,6 +136,6 @@ class ApkBundle(
          * @param apk The corresponding [Apk] file.
          * @param exception The optional [Apk.ApkException] when an exception occurred.
          */
-        class Write(apk: Apk, exception: Apk.ApkException.Write? = null) : SplitApkResult(apk, exception)
+        class Write(apk: Apk, exception: Apk.ApkException.Encode? = null) : SplitApkResult(apk, exception)
     }
 }

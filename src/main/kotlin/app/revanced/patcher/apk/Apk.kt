@@ -5,13 +5,13 @@ package app.revanced.patcher.apk
 import app.revanced.patcher.Patcher
 import app.revanced.patcher.PatcherOptions
 import app.revanced.patcher.logging.Logger
-import app.revanced.patcher.patch.PatchResult
 import app.revanced.patcher.util.ProxyBackedClassList
 import com.reandroid.apk.*
 import com.reandroid.apk.xmlencoder.EncodeMaterials
 import com.reandroid.archive.APKArchive
 import com.reandroid.archive.ByteInputSource
 import com.reandroid.archive.ZipAlign
+import com.reandroid.arsc.chunk.TypeBlock
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
 import com.reandroid.common.Frameworks
 import com.reandroid.common.TableEntryStore
@@ -46,6 +46,7 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
             val appElement = manifest.applicationElement.startElement
             appElement.resXmlAttributeArray.remove(appElement.getAttribute(AndroidManifestBlock.ID_extractNativeLibs))
             manifest.refresh()
+
         }
     }
     /**
@@ -58,15 +59,35 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
 
     /**
      * EncodeMaterials for encoding.
+     * TODO: subclass EncodeMaterials and eagerly register resources that do not exist yet.
      */
     internal val encodeMaterials = EncodeMaterials.create(module.tableBlock)
+
+    internal val typeTable = HashMap<String, TypeBlock>().apply {
+        module.tableBlock.pickOne().listAllSpecTypePair().forEach {
+            it.listTypeBlocks().forEach { block ->
+                var type = block.typeName
+                if (!type.endsWith("s")) type = "${type}s"
+                val properName = "values${block.qualifiers}/${type}"
+                assert(!this.contains(properName)) { "multiple valid values or something idk" }
+                // block.listEntries(true).forEach { logger.info("entry: ${it.name}, ${it.typeName}") }
+                this[properName] = block
+            }
+        }
+    }
+
+    /**
+     * A map of resource files from their actual name to their archive name.
+     */
+    internal val resFileTable = module.listResFiles().associateBy { "res/${it.buildPath()}" }
+    // internal fun getEntry(type: String, name: String): Entry? = typeTable[type]?.entryArray?.listItems()?.find { it.name == name }
 
     /**
      * Open a [app.revanced.patcher.apk.File]
      */
     fun openFile(path: String) = File(when {
-        // path == "res/values/public.xml" -> ResourceTableCoder(...)
-        path.startsWith("res/values") -> throw PatchResult.Error("res/values is an illusion!")
+        path == "res/values/public.xml" -> throw ApkException.Encode("Editing the resource table is not supported.")
+        path.startsWith("res/values") -> ValuesCoder(typeTable[path.removePrefix("res/").removeSuffix(".xml")], path, this)
         else -> ArchiveCoder(path, this)
     })
 
@@ -277,16 +298,11 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
         class Decode(message: String, throwable: Throwable? = null) : ApkException(message, throwable)
 
         /**
-         * An exception when writing resources.
+         * An exception when encoding resources.
          *
          * @param message The exception message.
          * @param throwable The corresponding [Throwable].
          */
-        open class Write(message: String, throwable: Throwable? = null) : ApkException(message, throwable) {
-            /**
-             * An exception when a resource directory could not be found while writing.
-             **/
-            object ResourceDirectoryNotFound : Write("Failed to find the resource directory")
-        }
+        class Encode(message: String, throwable: Throwable? = null) : ApkException(message, throwable)
     }
 }

@@ -184,7 +184,7 @@ class Patcher(private val options: PatcherOptions) {
             // if (decodingMode == Apk.ResourceDecodingMode.FULL) {
                 logger.info("Writing patched resources")
                 options.apkBundle.refreshResources(options).forEach { writeResult ->
-                    if (writeResult.exception is Apk.ApkException.Write) return@forEach
+                    if (writeResult.exception is Apk.ApkException.Encode) return@forEach
 
                     val patch = writeResult.apk.let {
                         when (it) {
