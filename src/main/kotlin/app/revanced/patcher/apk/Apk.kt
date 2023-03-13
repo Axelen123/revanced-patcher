@@ -39,16 +39,27 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
      */
     internal var module = ApkModule.loadApkFile(file, ApkUtil.toModuleName(file)).also { it.setAPKLogger(logger) }
 
-    // Workaround for some apps (YouTube Music refuses to install without this).
+
+
+    /**
+     * The metadata of the [Apk].
+     */
+    val packageMetadata = PackageMetadata()
+
     init {
         if (module.hasAndroidManifestBlock()) {
             val manifest = module.androidManifestBlock
             val appElement = manifest.applicationElement.startElement
+            // Workaround for some apps (YouTube Music refuses to install without this).
             appElement.resXmlAttributeArray.remove(appElement.getAttribute(AndroidManifestBlock.ID_extractNativeLibs))
             manifest.refresh()
-
+            if (manifest.versionName != null) {
+                packageMetadata.packageName = module.androidManifestBlock.packageName
+                packageMetadata.packageVersion = module.androidManifestBlock.versionName
+            }
         }
     }
+
     /**
      * EntryStore for decoding.
      */
@@ -61,7 +72,7 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
      * EncodeMaterials for encoding.
      * TODO: subclass EncodeMaterials and eagerly register resources that do not exist yet.
      */
-    internal val encodeMaterials = EncodeMaterials.create(module.tableBlock)
+    internal val encodeMaterials = EncodeMaterials.create(module.tableBlock).apply { setAPKLogger(logger) }
 
     internal val typeTable = HashMap<String, TypeBlock>().apply {
         module.tableBlock.pickOne().listAllSpecTypePair().forEach {
@@ -139,19 +150,6 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
             throw ApkException.Write("Failed to refresh resources: $e", e)
         }
          */
-    }
-
-    /**
-     * The metadata of the [Apk].
-     */
-    val packageMetadata = PackageMetadata()
-
-    // TODO: put these in the constructor of PackageMetadata instead.
-    init {
-        if (module.hasAndroidManifestBlock() && module.androidManifestBlock.versionName != null) {
-            packageMetadata.packageName = module.androidManifestBlock.packageName
-            packageMetadata.packageVersion = module.androidManifestBlock.versionName
-        }
     }
 
     /**
