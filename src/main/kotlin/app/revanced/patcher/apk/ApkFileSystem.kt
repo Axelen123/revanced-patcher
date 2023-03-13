@@ -20,7 +20,7 @@ sealed interface Coder {
     fun exists(): Boolean
 }
 
-class File(private val path: String, private val logger: Logger, private val coder: Coder, ) : Closeable {
+class File(private val path: String, private val logger: Logger, private val coder: Coder) : Closeable {
     internal val channel = InMemoryChannel()
     internal var changed = false
     val exists = coder.exists()
