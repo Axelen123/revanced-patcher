@@ -8,13 +8,16 @@ import app.revanced.patcher.logging.Logger
 import app.revanced.patcher.util.ProxyBackedClassList
 import com.reandroid.apk.*
 import com.reandroid.apk.xmlencoder.EncodeMaterials
+import com.reandroid.apk.xmlencoder.ValuesEncoder
 import com.reandroid.archive.APKArchive
 import com.reandroid.archive.ByteInputSource
 import com.reandroid.archive.ZipAlign
+import com.reandroid.arsc.chunk.TableBlock
 import com.reandroid.arsc.chunk.TypeBlock
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
 import com.reandroid.common.Frameworks
 import com.reandroid.common.TableEntryStore
+import com.reandroid.xml.XMLDocument
 
 import lanchon.multidexlib2.DexIO
 import lanchon.multidexlib2.MultiDexIO
@@ -39,6 +42,47 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
      */
     internal var module = ApkModule.loadApkFile(file, ApkUtil.toModuleName(file)).also { it.setAPKLogger(logger) }
 
+    internal val tableBlock: TableBlock? = module.tableBlock
+    internal val packageBlock = tableBlock?.packageArray?.pickOne()
+
+    /**
+     * EntryStore for decoding.
+     */
+    internal val entryStore = tableBlock?.let {
+        TableEntryStore().apply {
+            add(Frameworks.getAndroid())
+            add(it)
+        }
+    }
+
+    /**
+     * EncodeMaterials for encoding.
+     * TODO: subclass EncodeMaterials and eagerly register resources that do not exist yet.
+     */
+    internal val encodeMaterials = tableBlock?.let { EncodeMaterials.create(it).apply { setAPKLogger(logger) } }
+
+    internal val valuesEncoder = encodeMaterials?.let { ValuesEncoder(encodeMaterials) }
+
+    private fun generateTypeTable() = HashMap<String, TypeBlock>().apply {
+        packageBlock?.listAllSpecTypePair()?.forEach {
+            it.listTypeBlocks().forEach { block ->
+                var type = block.typeName
+                if (!type.endsWith("s")) type = "${type}s"
+                val properName = "values${block.qualifiers}/${type}"
+                assert(!this.contains(properName)) { "multiple valid values or something idk" }
+                // block.listEntries(true).forEach { logger.info("entry: ${it.name}, ${it.typeName}") }
+                this[properName] = block
+            }
+        }
+    }
+
+    internal var typeTable = generateTypeTable()
+
+    internal fun encodeValues(qualifiers: String, type: String, doc: XMLDocument) {
+        valuesEncoder!!.encodeValuesXml(qualifiers, type, doc)
+        typeTable = generateTypeTable()
+    }
+
 
     /**
      * The metadata of the [Apk].
@@ -59,38 +103,21 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
         }
     }
 
-    /**
-     * EntryStore for decoding.
-     */
-    internal val entryStore = TableEntryStore().apply {
-        add(Frameworks.getAndroid())
-        add(module.tableBlock)
-    }
-
-    /**
-     * EncodeMaterials for encoding.
-     * TODO: subclass EncodeMaterials and eagerly register resources that do not exist yet.
-     */
-    internal val encodeMaterials = EncodeMaterials.create(module.tableBlock).apply { setAPKLogger(logger) }
-
-    internal val typeTable = HashMap<String, TypeBlock>().apply {
-        module.tableBlock.pickOne().listAllSpecTypePair().forEach {
-            it.listTypeBlocks().forEach { block ->
-                var type = block.typeName
-                if (!type.endsWith("s")) type = "${type}s"
-                val properName = "values${block.qualifiers}/${type}"
-                assert(!this.contains(properName)) { "multiple valid values or something idk" }
-                // block.listEntries(true).forEach { logger.info("entry: ${it.name}, ${it.typeName}") }
-                this[properName] = block
-            }
-        }
-    }
 
     /**
      * A map of resource files from their actual name to their archive name.
      * Example: res/drawable-hdpi/icon.png -> res/4a.png
      */
-    internal val resFileTable = module.listResFiles().associateBy { "res/${it.buildPath()}" }
+    internal val resFileTable =
+        if (tableBlock != null) module.listResFiles().associate { "res/${it.buildPath()}" to it.filePath } else null
+
+    data class ResourceElement(val type: String, val name: String, val id: Long)
+
+    // TODO: move this to base only.
+    val resourceMap: List<ResourceElement> = typeTable.flatMap { (type, typeBlock) ->
+        typeBlock.listEntries(true).map { ResourceElement(it.typeName, it.name, it.resourceId.toLong()).apply { if (name == "app_theme_appearance_dark") logger.info("FOUND IT IN ${this@Apk}, ${this}") } }
+    }
+
     // internal fun getEntry(type: String, name: String): Entry? = typeTable[type]?.entryArray?.listItems()?.find { it.name == name }
 
     /**
@@ -99,10 +126,20 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
     fun openFile(path: String) = File(
         path, logger, when {
             path == "res/values/public.xml" -> throw ApkException.Encode("Editing the resource table is not supported.")
-            path.startsWith("res/values") -> ValuesCoder(
-                typeTable[path.removePrefix("res/").removeSuffix(".xml")],
-                this
-            )
+            path.startsWith("res/values") -> {
+                val s = path.removePrefix("res/").removeSuffix(".xml") // values-v29/drawables
+                val parsingArray = s.removePrefix("values").split('/')
+                val qualifiers = parsingArray.first()
+                val type = parsingArray.last().let {
+                    if (it != "plurals") it.removeSuffix("s") else it
+                }
+                ValuesCoder(
+                    typeTable[s],
+                    qualifiers,
+                    type,
+                    this
+                )
+            }
 
             else -> ArchiveCoder(path, this)
         }

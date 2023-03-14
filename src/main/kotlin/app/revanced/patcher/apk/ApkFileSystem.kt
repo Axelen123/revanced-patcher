@@ -4,8 +4,6 @@ import app.revanced.patcher.logging.Logger
 import app.revanced.patcher.util.InMemoryChannel
 import com.reandroid.apk.xmlencoder.XMLEncodeSource
 import com.reandroid.archive.ByteInputSource
-import com.reandroid.arsc.chunk.TypeBlock
-import com.reandroid.arsc.chunk.xml.ResXmlDocument
 import com.reandroid.xml.XMLDocument
 import com.reandroid.xml.source.XMLDocumentSource
 import java.io.ByteArrayInputStream
@@ -14,13 +12,14 @@ import java.io.Closeable
 import java.io.OutputStream
 import java.nio.ByteBuffer
 
-sealed interface Coder {
+internal sealed interface Coder {
     fun decode(): ByteArray
     fun encode(contents: ByteArray)
     fun exists(): Boolean
 }
 
-class File(private val path: String, private val logger: Logger, private val coder: Coder) : Closeable {
+class File internal constructor(private val path: String, private val logger: Logger, private val coder: Coder) :
+    Closeable {
     internal val channel = InMemoryChannel()
     internal var changed = false
     val exists = coder.exists()
@@ -29,7 +28,7 @@ class File(private val path: String, private val logger: Logger, private val cod
 
     init {
         if (exists) {
-            logger.info("Decoding archive file: $path")
+            logger.info("Decoding file: $path")
             replaceContents(coder.decode())
             changed = false
         }
@@ -37,7 +36,7 @@ class File(private val path: String, private val logger: Logger, private val cod
 
     override fun close() {
         if (changed) {
-            logger.info("Encoding archive file: $path")
+            logger.info("Encoding file: $path")
             coder.encode(contents)
         }
     }
@@ -69,40 +68,38 @@ class File(private val path: String, private val logger: Logger, private val cod
     }
 }
 
-internal class ArchiveCoder(path: String, private val apk: Apk) : Coder {
-    private val resFile = apk.resFileTable[path]
-    private val archivePath = resFile?.filePath ?: path
+internal class ArchiveCoder(val path: String, private val apk: Apk) : Coder {
+    private val archivePath = apk.resFileTable?.get(path) ?: path
     private val isBinaryXml get() = archivePath.endsWith(".xml") // TODO: figure out why tf get() is needed.
-
+    private val module = apk.module
+    private val archive = module.apkArchive
     override fun decode(): ByteArray {
-        val inputSrc = apk.module.apkArchive.getInputSource(archivePath)!!
+        apk.logger.warn("explosion: $archivePath : $path")
+        val inputSrc = archive.getInputSource(archivePath)!! // TODO: figure out why this does not work twice...
         return if (isBinaryXml) {
-            // Decode resource XML
-            val resDoc = ResXmlDocument()
-            inputSrc.openStream().use { resDoc.readBytes(it) }
-
-            val packageBlock = resFile?.pickOne()?.packageBlock
-                ?: apk.module.tableBlock.packageArray.pickOne()
-            // Convert it to normal XML
-            val xmlDoc = resDoc.decodeToXml(
-                apk.entryStore,
-                packageBlock.id
-            )
-
-            return ByteArrayOutputStream().apply { xmlDoc.save(this, false) }.toByteArray()
+            ByteArrayOutputStream().apply {
+                // Decode android binary XML and then convert it to normal XML
+                module.loadResXmlDocument(archivePath).decodeToXml(
+                    apk.entryStore,
+                    apk.packageBlock!!.id
+                ).save(this, false)
+            }.toByteArray()
         } else inputSrc.openStream().use { it.readAllBytes() }
     }
 
     override fun encode(contents: ByteArray) {
-
-        apk.module.apkArchive.add(
-            if (!isBinaryXml) ByteInputSource(contents, archivePath) else {
-                XMLEncodeSource(
-                    apk.encodeMaterials,
-                    XMLDocumentSource(archivePath, XMLDocument.load(ByteArrayInputStream(contents)))
-                )
-            }
-        )
+        // TODO: register new files in the resource table.
+        archive.apply {
+            remove(archivePath)
+            add(
+                if (!isBinaryXml) ByteInputSource(contents, archivePath) else {
+                    XMLEncodeSource(
+                        apk.encodeMaterials,
+                        XMLDocumentSource(archivePath, XMLDocument.load(ByteArrayInputStream(contents)))
+                    )
+                }
+            )
+        }
     }
 
     override fun exists() = apk.module.apkArchive.getInputSource(archivePath) != null

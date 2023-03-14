@@ -4,13 +4,13 @@ import com.reandroid.apk.XmlHelper
 import com.reandroid.apk.xmldecoder.XMLBagDecoder
 import com.reandroid.arsc.chunk.TypeBlock
 import com.reandroid.arsc.value.*
-import com.reandroid.common.EntryStore
 import com.reandroid.xml.XMLAttribute
 import com.reandroid.xml.XMLDocument
 import com.reandroid.xml.XMLElement
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 
-internal class ValuesCoder(internal val typeBlock: TypeBlock?, internal val apk: Apk) :
+internal class ValuesCoder(private val typeBlock: TypeBlock?, private val qualifiers: String, private val type: String, internal val apk: Apk) :
     Coder {
     private val decodedEntries = HashMap<Int, Set<ResConfig>>()
     private val xmlBagDecoder = XMLBagDecoder(apk.entryStore)
@@ -62,5 +62,8 @@ internal class ValuesCoder(internal val typeBlock: TypeBlock?, internal val apk:
         return element
     }
 
-    override fun encode(contents: ByteArray) = TODO("encode() is not implemented.")
+    override fun encode(contents: ByteArray) {
+        apk.logger.info("ENCODING VALUES: '$qualifiers' : '$type'")
+        apk.encodeValues(qualifiers, type, XMLDocument.load(ByteArrayInputStream(contents)))
+    }
 }
