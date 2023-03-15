@@ -4,6 +4,11 @@ import app.revanced.patcher.logging.Logger
 import app.revanced.patcher.util.InMemoryChannel
 import com.reandroid.apk.xmlencoder.XMLEncodeSource
 import com.reandroid.archive.ByteInputSource
+import com.reandroid.archive.InputSource
+import com.reandroid.arsc.chunk.TableBlock
+import com.reandroid.arsc.chunk.TypeBlock
+import com.reandroid.common.EntryStore
+import com.reandroid.common.TableEntryStore
 import com.reandroid.xml.XMLDocument
 import com.reandroid.xml.source.XMLDocumentSource
 import java.io.ByteArrayInputStream
@@ -11,6 +16,9 @@ import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.OutputStream
 import java.nio.ByteBuffer
+import kotlin.io.path.Path
+import kotlin.io.path.nameWithoutExtension
+import kotlin.reflect.jvm.jvmName
 
 internal sealed interface Coder {
     fun decode(): ByteArray
@@ -75,16 +83,49 @@ internal class ArchiveCoder(private val path: String, private val apk: Apk) : Co
     private val isBinaryXml get() = archivePath.endsWith(".xml") // TODO: figure out why tf get() is needed.
     private val module = apk.module
     private val archive = module.apkArchive
+    private val source: InputSource? = archive.getInputSource(archivePath)
+
+    private fun decodeXMLFile() = when (archivePath) {
+        "AndroidManifest.xml" -> module.androidManifestBlock!!.decodeToXml(apk.entryStore, apk.packageBlock?.id ?: 0)
+        else -> module.decodeXMLFile(archivePath)
+    }
     override fun decode(): ByteArray = if (isBinaryXml) {
+        /**
+         * Avoid having to potentially encode and decode the same XML over and over again.
+         * This also means we avoid having to encode XML potentially referencing resources that have not been created yet.
+         */
+        val xml = if (source is XMLEncodeSource) source.xmlSource.xmlDocument else decodeXMLFile()
         ByteArrayOutputStream().also {
-            module.decodeXMLFile(archivePath).save(it, false)
+            xml.save(it, false)
         }.toByteArray()
-    } else archive.getInputSource(archivePath)!!.openStream().use { it.readAllBytes() }
+    } else source!!.openStream().use { it.readAllBytes() }
+
+    /*
+    private fun getTypeBlock() {
+        val qualifiers = path.split("/")[1].split("-").toMutableList()
+        val type = qualifiers.removeAt(0)
+        if (qualifiers.size > 0) {
+            qualifiers.add(0, "")
+        }
+        val key = "values${qualifiers.joinToString("-")}/${type}s"
+        return apk.typeTable[key] ?:
+    }
+     */
 
     override fun encode(contents: ByteArray) {
         val needsRegistration = path.startsWith("res") && !exists()
         if (needsRegistration) {
-            apk.tableBlock!!.tableStringPool.getOrCreate(path).set(path) // TODO: do I have to manually create entries for it or something?
+            apk.tableBlock!!.tableStringPool.getOrCreate(path)
+                .set(path)
+            val qualifiers = path.split("/")[1].split("-").toMutableList()
+            val type = qualifiers.removeAt(0)
+            if (qualifiers.size > 0) {
+                qualifiers.add(0, "")
+            }
+            apk.packageBlock!!.getOrCreate(qualifiers.joinToString("-"), type, Path(path).nameWithoutExtension)
+            // apk.logger.warn(key)
+
+            // apk.typeTable[key]!!.listEntries(true).forEach { apk.logger.info("asdf $path: ${it.name} ${it.typeName}")}
         }
         archive.add(
             if (!isBinaryXml) ByteInputSource(contents, archivePath) else {
@@ -96,5 +137,5 @@ internal class ArchiveCoder(private val path: String, private val apk: Apk) : Co
         )
     }
 
-    override fun exists() = archive.getInputSource(archivePath) != null
+    override fun exists() = source != null
 }

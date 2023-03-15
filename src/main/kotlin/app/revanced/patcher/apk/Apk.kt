@@ -7,7 +7,7 @@ import app.revanced.patcher.PatcherOptions
 import app.revanced.patcher.logging.Logger
 import app.revanced.patcher.util.ProxyBackedClassList
 import com.reandroid.apk.*
-import com.reandroid.apk.xmlencoder.EncodeMaterials
+import com.reandroid.apk.xmlencoder.EncodeException
 import com.reandroid.apk.xmlencoder.ValuesEncoder
 import com.reandroid.archive.APKArchive
 import com.reandroid.archive.ByteInputSource
@@ -48,18 +48,31 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
     /**
      * EntryStore for decoding.
      */
-    internal val entryStore = tableBlock?.let {
-        TableEntryStore().apply {
-            add(Frameworks.getAndroid())
-            add(it)
+    internal val entryStore = TableEntryStore().apply {
+        add(Frameworks.getAndroid())
+        tableBlock?.let { add(it) }
+    }
+    private fun generateTypeTable() = HashMap<String, TypeBlock>().apply {
+        packageBlock?.listAllSpecTypePair()?.forEach {
+            it.listTypeBlocks().forEach { block ->
+                var type = block.typeName
+                if (!type.endsWith("s")) type = "${type}s"
+                val properName = "values${block.qualifiers}/${type}"
+                if (properName.contains("layouts")) logger.info("found: $properName")
+                assert(!this.contains(properName)) { "multiple valid values or something idk" }
+                // block.listEntries(true).forEach { logger.info("entry: ${it.name}, ${it.typeName}") }
+                this[properName] = block
+            }
         }
     }
+
+    internal var typeTable = generateTypeTable()
 
     /**
      * EncodeMaterials for encoding.
      * TODO: subclass EncodeMaterials and eagerly register resources that do not exist yet.
      */
-    internal val encodeMaterials = tableBlock?.let { EncodeMaterials.create(it).apply { setAPKLogger(logger) } }
+    internal val encodeMaterials = tableBlock?.let { EncodeMaterials(this) }
 
     internal val valuesEncoder = encodeMaterials?.let { ValuesEncoder(it) }
 
@@ -76,24 +89,76 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
         openFiles.remove(path)
     }
 
-    private fun generateTypeTable() = HashMap<String, TypeBlock>().apply {
-        packageBlock?.listAllSpecTypePair()?.forEach {
-            it.listTypeBlocks().forEach { block ->
-                var type = block.typeName
-                if (!type.endsWith("s")) type = "${type}s"
-                val properName = "values${block.qualifiers}/${type}"
-                assert(!this.contains(properName)) { "multiple valid values or something idk" }
-                // block.listEntries(true).forEach { logger.info("entry: ${it.name}, ${it.typeName}") }
-                this[properName] = block
+    private data class DelayedDocument(val qualifiers: String, val type: String, val doc: XMLDocument)
+
+    private val delayedValues = mutableListOf<DelayedDocument>()
+
+    /**
+     * Refresh updated resources for an [Apk.file].
+     *
+     * @param options The [PatcherOptions] to write the resources with.
+     */
+    internal open fun refreshResources(options: PatcherOptions) {
+        /*
+        try {
+            val encoder = ApkModuleXmlEncoder()
+            encoder.scanDirectory(getResourceDirectory(options))
+            module = encoder.apkModule
+        } catch (e: Exception) {
+            throw ApkException.Write("Failed to refresh resources: $e", e)
+        }
+         */
+        openFiles.forEach { logger.warn("File $it not closed! File modifications will not be applied if you do not close them.") }
+        delayedValues.forEach {
+            encodeValues(it.qualifiers, it.type, it.doc, false)?.let { err ->
+                it.doc.save(File("/tmp/asdf.xml"), true)
+                logger.error("Failed to encode: ${it.type}${it.qualifiers}")
+                logger.error("Error: ${err.stackTraceToString()}")
             }
+        }
+
+        // Update package block name if necessary.
+        val manifest = AndroidManifestBlock.load(module.apkArchive.getInputSource("AndroidManifest.xml").openStream())
+        module.setManifest(manifest)
+        tableBlock?.packageArray?.listItems()?.forEach {
+            logger.warn("${it.name} : ${manifest.packageName}")
+            it.name = manifest.packageName
         }
     }
 
-    internal var typeTable = generateTypeTable()
+    internal fun getDelayed(qualifiers: String, type: String): XMLDocument? =
+        delayedValues.find { it.type == type && it.qualifiers == qualifiers }?.doc
 
-    internal fun encodeValues(qualifiers: String, type: String, doc: XMLDocument) {
-        valuesEncoder!!.encodeValuesXml(qualifiers, type, doc)
+    // TODO: this feels wrong and hacky...
+    internal fun encodeValues(
+        qualifiers: String,
+        type: String,
+        doc: XMLDocument,
+        encodeDelayedValues: Boolean
+    ): EncodeException? {
+        try {
+            valuesEncoder!!.encodeValuesXml(qualifiers, type, doc)
+            delayedValues.apply {
+                val index = indexOfFirst { it.qualifiers == qualifiers && it.type == type }
+                if (index != -1) {
+                    delayedValues.removeAt(index)
+                }
+            }
+        } catch (e: EncodeException) {
+            if (encodeDelayedValues) {
+                logger.info("Delaying ${type}${qualifiers}")
+                delayedValues.add(DelayedDocument(qualifiers, type, doc))
+            }
+            return e
+        }
+
         typeTable = generateTypeTable()
+        if (encodeDelayedValues) {
+            delayedValues.forEach {
+                encodeValues(it.qualifiers, it.type, it.doc, false)
+            }
+        }
+        return null
     }
 
     /**
@@ -114,7 +179,6 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
             }
         }
     }
-
 
     /**
      * A map of resource files from their actual name to their archive name.
@@ -194,24 +258,6 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
             throw ApkException.Decode("Failed to decode resources", e)
         }
          */
-    }
-
-    /**
-     * Refresh updated resources for an [Apk.file].
-     *
-     * @param options The [PatcherOptions] to write the resources with.
-     */
-    internal open fun refreshResources(options: PatcherOptions) {
-        /*
-        try {
-            val encoder = ApkModuleXmlEncoder()
-            encoder.scanDirectory(getResourceDirectory(options))
-            module = encoder.apkModule
-        } catch (e: Exception) {
-            throw ApkException.Write("Failed to refresh resources: $e", e)
-        }
-         */
-        openFiles.forEach { logger.warn("File $it not closed! File modifications will not be applied if you do not close them.") }
     }
 
     /**

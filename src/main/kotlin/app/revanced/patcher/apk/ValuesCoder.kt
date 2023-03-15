@@ -10,25 +10,28 @@ import com.reandroid.xml.XMLElement
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 
-internal class ValuesCoder(private val typeBlock: TypeBlock?, private val qualifiers: String, private val type: String, internal val apk: Apk) :
+internal class ValuesCoder(
+    private val typeBlock: TypeBlock?,
+    private val qualifiers: String,
+    private val type: String,
+    internal val apk: Apk
+) :
     Coder {
     private val decodedEntries = HashMap<Int, Set<ResConfig>>()
     private val xmlBagDecoder = XMLBagDecoder(apk.entryStore)
     override fun exists() = typeBlock != null
     override fun decode(): ByteArray = ByteArrayOutputStream(256).also {
-        val xmlDocument = XMLDocument("resources")
-        val docElement = xmlDocument.documentElement
-        typeBlock!!.listEntries(true).forEach { entry ->
-            if (!containsDecodedEntry(entry)) {
-                docElement.addChild(decodeValue(entry))
+        (apk.getDelayed(qualifiers, type) ?: XMLDocument("resources").apply {
+            typeBlock!!.listEntries(true).forEach { entry ->
+                if (!containsDecodedEntry(entry)) {
+                    documentElement.addChild(decodeValue(entry))
+                }
             }
-        }
 
-        if (docElement.childesCount == 0) {
-            return@also
-        }
-
-        xmlDocument.save(it, false)
+            if (documentElement.childesCount == 0) {
+                return@also
+            }
+        }).save(it, false)
     }.toByteArray()
 
     private fun containsDecodedEntry(entry: Entry): Boolean {
@@ -63,7 +66,6 @@ internal class ValuesCoder(private val typeBlock: TypeBlock?, private val qualif
     }
 
     override fun encode(contents: ByteArray) {
-        apk.logger.info("ENCODING VALUES: '$qualifiers' : '$type'")
-        apk.encodeValues(qualifiers, type, XMLDocument.load(ByteArrayInputStream(contents)))
+        apk.encodeValues(qualifiers, type, XMLDocument.load(ByteArrayInputStream(contents)), true)
     }
 }
