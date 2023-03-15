@@ -18,7 +18,7 @@ internal sealed interface Coder {
     fun exists(): Boolean
 }
 
-class File internal constructor(private val path: String, private val logger: Logger, private val coder: Coder) :
+class File internal constructor(private val path: String, private val apk: Apk, private val coder: Coder) :
     Closeable {
     internal val channel = InMemoryChannel()
     internal var changed = false
@@ -27,8 +27,9 @@ class File internal constructor(private val path: String, private val logger: Lo
     override fun toString() = path
 
     init {
+        apk.lockFile(path)
         if (exists) {
-            logger.info("Decoding file: $path")
+            apk.logger.info("Decoding file: $path")
             replaceContents(coder.decode())
             changed = false
         }
@@ -36,9 +37,10 @@ class File internal constructor(private val path: String, private val logger: Lo
 
     override fun close() {
         if (changed) {
-            logger.info("Encoding file: $path")
+            apk.logger.info("Encoding file: $path")
             coder.encode(contents)
         }
+        apk.unlockFile(path)
     }
 
     val contents get() = channel.contents
@@ -68,39 +70,28 @@ class File internal constructor(private val path: String, private val logger: Lo
     }
 }
 
-internal class ArchiveCoder(val path: String, private val apk: Apk) : Coder {
+internal class ArchiveCoder(path: String, private val apk: Apk) : Coder {
     private val archivePath = apk.resFileTable?.get(path) ?: path
     private val isBinaryXml get() = archivePath.endsWith(".xml") // TODO: figure out why tf get() is needed.
     private val module = apk.module
     private val archive = module.apkArchive
-    override fun decode(): ByteArray {
-        apk.logger.warn("explosion: $archivePath : $path")
-        val inputSrc = archive.getInputSource(archivePath)!! // TODO: figure out why this does not work twice...
-        return if (isBinaryXml) {
-            ByteArrayOutputStream().apply {
-                // Decode android binary XML and then convert it to normal XML
-                module.loadResXmlDocument(archivePath).decodeToXml(
-                    apk.entryStore,
-                    apk.packageBlock!!.id
-                ).save(this, false)
-            }.toByteArray()
-        } else inputSrc.openStream().use { it.readAllBytes() }
-    }
+    override fun decode(): ByteArray = if (isBinaryXml) {
+        ByteArrayOutputStream().also {
+            module.decodeXMLFile(archivePath).save(it, false)
+        }.toByteArray()
+    } else archive.getInputSource(archivePath)!!.openStream().use { it.readAllBytes() }
 
     override fun encode(contents: ByteArray) {
         // TODO: register new files in the resource table.
-        archive.apply {
-            remove(archivePath)
-            add(
-                if (!isBinaryXml) ByteInputSource(contents, archivePath) else {
-                    XMLEncodeSource(
-                        apk.encodeMaterials,
-                        XMLDocumentSource(archivePath, XMLDocument.load(ByteArrayInputStream(contents)))
-                    )
-                }
-            )
-        }
+        archive.add(
+            if (!isBinaryXml) ByteInputSource(contents, archivePath) else {
+                XMLEncodeSource(
+                    apk.encodeMaterials,
+                    XMLDocumentSource(archivePath, XMLDocument.load(ByteArrayInputStream(contents)))
+                )
+            }
+        )
     }
 
-    override fun exists() = apk.module.apkArchive.getInputSource(archivePath) != null
+    override fun exists() = archive.getInputSource(archivePath) != null
 }

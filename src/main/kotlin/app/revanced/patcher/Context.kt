@@ -159,9 +159,11 @@ class DomFileEditor internal constructor(
                 }
 
                 it.value.close()
+                onClose?.invoke()
                 return
             }
         }
+        // TODO: find a better way to ensure onClose is always called.
         onClose?.invoke()
         closed = true
     }

@@ -61,7 +61,20 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
      */
     internal val encodeMaterials = tableBlock?.let { EncodeMaterials.create(it).apply { setAPKLogger(logger) } }
 
-    internal val valuesEncoder = encodeMaterials?.let { ValuesEncoder(encodeMaterials) }
+    internal val valuesEncoder = encodeMaterials?.let { ValuesEncoder(it) }
+
+    private val openFiles = mutableSetOf<String>()
+
+    internal fun lockFile(path: String) {
+        if (openFiles.contains(path)) {
+            throw ApkException.Decode("Path \"$path\" is locked. If you are a patch developer, make sure you always close files.")
+        }
+        openFiles.add(path)
+    }
+
+    internal fun unlockFile(path: String) {
+        openFiles.remove(path)
+    }
 
     private fun generateTypeTable() = HashMap<String, TypeBlock>().apply {
         packageBlock?.listAllSpecTypePair()?.forEach {
@@ -82,7 +95,6 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
         valuesEncoder!!.encodeValuesXml(qualifiers, type, doc)
         typeTable = generateTypeTable()
     }
-
 
     /**
      * The metadata of the [Apk].
@@ -115,7 +127,13 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
 
     // TODO: move this to base only.
     val resourceMap: List<ResourceElement> = typeTable.flatMap { (type, typeBlock) ->
-        typeBlock.listEntries(true).map { ResourceElement(it.typeName, it.name, it.resourceId.toLong()).apply { if (name == "app_theme_appearance_dark") logger.info("FOUND IT IN ${this@Apk}, ${this}") } }
+        typeBlock.listEntries(true).map {
+            ResourceElement(
+                it.typeName,
+                it.name,
+                it.resourceId.toLong()
+            )
+        }
     }
 
     // internal fun getEntry(type: String, name: String): Entry? = typeTable[type]?.entryArray?.listItems()?.find { it.name == name }
@@ -124,7 +142,7 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
      * Open a [app.revanced.patcher.apk.File]
      */
     fun openFile(path: String) = File(
-        path, logger, when {
+        path, this, when {
             path == "res/values/public.xml" -> throw ApkException.Encode("Editing the resource table is not supported.")
             path.startsWith("res/values") -> {
                 val s = path.removePrefix("res/").removeSuffix(".xml") // values-v29/drawables
@@ -193,6 +211,7 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
             throw ApkException.Write("Failed to refresh resources: $e", e)
         }
          */
+        openFiles.forEach { logger.warn("File $it not closed! File modifications will not be applied if you do not close them.") }
     }
 
     /**
