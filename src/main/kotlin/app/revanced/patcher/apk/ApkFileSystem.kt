@@ -70,7 +70,7 @@ class File internal constructor(private val path: String, private val apk: Apk, 
     }
 }
 
-internal class ArchiveCoder(path: String, private val apk: Apk) : Coder {
+internal class ArchiveCoder(private val path: String, private val apk: Apk) : Coder {
     private val archivePath = apk.resFileTable?.get(path) ?: path
     private val isBinaryXml get() = archivePath.endsWith(".xml") // TODO: figure out why tf get() is needed.
     private val module = apk.module
@@ -82,7 +82,10 @@ internal class ArchiveCoder(path: String, private val apk: Apk) : Coder {
     } else archive.getInputSource(archivePath)!!.openStream().use { it.readAllBytes() }
 
     override fun encode(contents: ByteArray) {
-        // TODO: register new files in the resource table.
+        val needsRegistration = path.startsWith("res") && !exists()
+        if (needsRegistration) {
+            apk.tableBlock!!.tableStringPool.getOrCreate(path).set(path) // TODO: do I have to manually create entries for it or something?
+        }
         archive.add(
             if (!isBinaryXml) ByteInputSource(contents, archivePath) else {
                 XMLEncodeSource(
