@@ -14,15 +14,20 @@ class EncodeMaterials(private val apk: Apk) : EncodeMaterials() {
                 loadPackageBlock(it)
             }.table.listPackages()[0])
         }
-        currentPackage = apk.packageBlock ?: PackageBlock() // Create an empty PackageBlock() so we can encode the manifest.
+        currentPackage =
+            apk.packageBlock ?: PackageBlock() // Create an empty PackageBlock() so we can encode the manifest.
 
         addFramework(Frameworks.getAndroid())
     }
 
-    private val layoutTypeBlock = apk.typeTable["values/layouts"]
+    private val idTypeBlock = apk.typeTable["values/ids"]
 
-    override fun resolveLocalResourceId(type: String, name: String) = if (type == "+id") {
-        apk.logger.info("Creating new entry for: $name")
-        layoutTypeBlock!!.getOrCreateEntry(name).resourceId
-    } else super.resolveLocalResourceId(type, name)
+    override fun resolveLocalResourceId(type: String, name: String): Int {
+        if (type == "+id") {
+            apk.logger.info("Creating new entry for: $name")
+            val entry = idTypeBlock!!.getOrCreateEntry(name)
+            currentPackage.onEntryAdded(entry)
+        }
+        return super.resolveLocalResourceId(type.removePrefix("+"), name)
+    }
 }

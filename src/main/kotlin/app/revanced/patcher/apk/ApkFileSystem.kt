@@ -7,6 +7,8 @@ import com.reandroid.archive.ByteInputSource
 import com.reandroid.archive.InputSource
 import com.reandroid.arsc.chunk.TableBlock
 import com.reandroid.arsc.chunk.TypeBlock
+import com.reandroid.arsc.value.ResTableEntry
+import com.reandroid.arsc.value.ResValue
 import com.reandroid.common.EntryStore
 import com.reandroid.common.TableEntryStore
 import com.reandroid.xml.XMLDocument
@@ -111,17 +113,15 @@ internal class ArchiveCoder(private val path: String, private val apk: Apk) : Co
     override fun encode(contents: ByteArray) {
         val needsRegistration = path.startsWith("res") && !exists()
         if (needsRegistration) {
-            apk.tableBlock!!.tableStringPool.getOrCreate(path)
-                .set(path)
             val qualifiers = path.split("/")[1].split("-").toMutableList()
             val type = qualifiers.removeAt(0)
             if (qualifiers.size > 0) {
                 qualifiers.add(0, "")
             }
-            apk.packageBlock!!.getOrCreate(qualifiers.joinToString("-"), type, Path(path).nameWithoutExtension)
-            // apk.logger.warn(key)
-
-            // apk.typeTable[key]!!.listEntries(true).forEach { apk.logger.info("asdf $path: ${it.name} ${it.typeName}")}
+            
+            apk.packageBlock!!.getOrCreate(qualifiers.joinToString("-"), type, Path(path).nameWithoutExtension).also {
+                (it.tableEntry as ResTableEntry).value.valueAsString = path
+            }
         }
         archive.add(
             if (!isBinaryXml) ByteInputSource(contents, archivePath) else {
