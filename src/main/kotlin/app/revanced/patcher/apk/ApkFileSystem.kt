@@ -85,16 +85,12 @@ internal class ArchiveCoder(private val path: String, private val apk: Apk) : Co
     private val archive = module.apkArchive
     private val source: InputSource? = archive.getInputSource(archivePath)
 
-    private fun decodeXMLFile() = when (archivePath) {
-        "AndroidManifest.xml" -> module.androidManifestBlock!!.decodeToXml(apk.entryStore, apk.packageBlock?.id ?: 0)
-        else -> module.decodeXMLFile(archivePath)
-    }
     override fun decode(): ByteArray = if (isBinaryXml) {
         /**
          * Avoid having to potentially encode and decode the same XML over and over again.
          * This also means we avoid having to encode XML potentially referencing resources that have not been created yet.
          */
-        val xml = if (source is XMLEncodeSource) source.xmlSource.xmlDocument else decodeXMLFile()
+        val xml = if (source is XMLEncodeSource) source.xmlSource.xmlDocument else module.decodeXMLFile(archivePath)
         ByteArrayOutputStream().also {
             xml.save(it, false)
         }.toByteArray()

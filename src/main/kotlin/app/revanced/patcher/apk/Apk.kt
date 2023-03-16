@@ -9,21 +9,26 @@ import app.revanced.patcher.util.ProxyBackedClassList
 import com.reandroid.apk.*
 import com.reandroid.apk.xmlencoder.EncodeException
 import com.reandroid.apk.xmlencoder.ValuesEncoder
+import com.reandroid.apk.xmlencoder.XMLFileEncoder
 import com.reandroid.archive.APKArchive
 import com.reandroid.archive.ByteInputSource
 import com.reandroid.archive.ZipAlign
 import com.reandroid.arsc.chunk.TableBlock
 import com.reandroid.arsc.chunk.TypeBlock
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
+import com.reandroid.arsc.chunk.xml.ResXmlDocument
 import com.reandroid.common.Frameworks
 import com.reandroid.common.TableEntryStore
 import com.reandroid.xml.XMLDocument
+import com.reandroid.xml.source.XMLDocumentSource
+import com.reandroid.xml.source.XMLSource
 
 import lanchon.multidexlib2.DexIO
 import lanchon.multidexlib2.MultiDexIO
 import org.jf.dexlib2.Opcodes
 import org.jf.dexlib2.writer.io.MemoryDataStore
 import org.w3c.dom.*
+import java.io.ByteArrayInputStream
 import java.io.File
 
 /**
@@ -40,7 +45,8 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
     /**
      * ARSCLib Apk module.
      */
-    internal var module = ApkModule.loadApkFile(file, ApkUtil.toModuleName(file)).also { it.setAPKLogger(logger) }
+    internal val module = ApkModule.loadApkFile(file, ApkUtil.toModuleName(file)).also { it.setAPKLogger(logger) }
+    internal var manifest = module.androidManifestBlock
 
     internal val tableBlock: TableBlock? = module.tableBlock
     internal val packageBlock = tableBlock?.packageArray?.pickOne()
@@ -52,6 +58,7 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
         add(Frameworks.getAndroid())
         tableBlock?.let { add(it) }
     }
+    internal var manifestXml = manifest.decodeToXml(entryStore, packageBlock?.id ?: 0)
     private fun generateTypeTable() = HashMap<String, TypeBlock>().apply {
         packageBlock?.listAllSpecTypePair()?.forEach {
             it.listTypeBlocks().forEach { block ->
@@ -70,11 +77,10 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
 
     /**
      * EncodeMaterials for encoding.
-     * TODO: subclass EncodeMaterials and eagerly register resources that do not exist yet.
      */
-    internal val encodeMaterials = tableBlock?.let { EncodeMaterials(this) }
+    internal val encodeMaterials = EncodeMaterials(this)
 
-    internal val valuesEncoder = encodeMaterials?.let { ValuesEncoder(it) }
+    internal val valuesEncoder = ValuesEncoder(encodeMaterials)
 
     private val openFiles = mutableSetOf<String>()
 
@@ -118,7 +124,9 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
         }
 
         // Update package block name if necessary.
-        val manifest = AndroidManifestBlock.load(module.apkArchive.getInputSource("AndroidManifest.xml").openStream())
+        val resXml = XMLFileEncoder(encodeMaterials).encode(manifestXml)
+        manifest = AndroidManifestBlock()
+        manifest.readBytes(ByteArrayInputStream(resXml.bytes))
         module.setManifest(manifest)
         tableBlock?.packageArray?.listItems()?.forEach {
             logger.warn("${it.name} : ${manifest.packageName}")
@@ -167,16 +175,9 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
     val packageMetadata = PackageMetadata()
 
     init {
-        if (module.hasAndroidManifestBlock()) {
-            val manifest = module.androidManifestBlock
-            val appElement = manifest.applicationElement.startElement
-            // Workaround for some apps (YouTube Music refuses to install without this).
-            appElement.resXmlAttributeArray.remove(appElement.getAttribute(AndroidManifestBlock.ID_extractNativeLibs))
-            manifest.refresh()
-            if (manifest.versionName != null) {
-                packageMetadata.packageName = module.androidManifestBlock.packageName
-                packageMetadata.packageVersion = module.androidManifestBlock.versionName
-            }
+        if (manifest.versionName != null) {
+            packageMetadata.packageName = manifest.packageName
+            packageMetadata.packageVersion = manifest.versionName
         }
     }
 
@@ -208,6 +209,7 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
     fun openFile(path: String) = File(
         path, this, when {
             path == "res/values/public.xml" -> throw ApkException.Encode("Editing the resource table is not supported.")
+            path == "AndroidManifest.xml" -> ManifestCoder(this)
             path.startsWith("res/values") -> {
                 val s = path.removePrefix("res/").removeSuffix(".xml") // values-v29/drawables
                 val parsingArray = s.removePrefix("values").split('/')
@@ -284,15 +286,6 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
          */
         class Library(filePath: String, logger: Logger) : Split(filePath, logger) {
             override fun toString() = "library"
-            override fun emitResources(options: PatcherOptions, mode: ResourceDecodingMode) {
-                APKArchive.loadZippedApk(file).extract(getResourceDirectory(options))
-            }
-
-            override fun refreshResources(options: PatcherOptions) {}
-
-            override fun save(out: File) {
-                file.copyTo(out)
-            }
         }
 
         /**
