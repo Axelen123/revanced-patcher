@@ -120,6 +120,7 @@ internal class ArchiveCoder(private val path: String, private val apk: Apk) : Co
             }
             
             apk.packageBlock!!.getOrCreate(qualifiers.joinToString("-"), type, Path(path).nameWithoutExtension).also {
+                // it.setValueAsString(path) does not work for some reason...
                 (it.tableEntry as ResTableEntry).value.valueAsString = path
             }
         }
