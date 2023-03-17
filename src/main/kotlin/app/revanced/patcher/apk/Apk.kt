@@ -9,6 +9,7 @@ import app.revanced.patcher.util.ProxyBackedClassList
 import com.reandroid.apk.*
 import com.reandroid.apk.xmlencoder.EncodeException
 import com.reandroid.apk.xmlencoder.ValuesEncoder
+import com.reandroid.apk.xmlencoder.XMLEncodeSource
 import com.reandroid.apk.xmlencoder.XMLFileEncoder
 import com.reandroid.archive.APKArchive
 import com.reandroid.archive.ByteInputSource
@@ -17,6 +18,7 @@ import com.reandroid.arsc.chunk.TableBlock
 import com.reandroid.arsc.chunk.TypeBlock
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
 import com.reandroid.arsc.chunk.xml.ResXmlDocument
+import com.reandroid.arsc.value.ResTableEntry
 import com.reandroid.common.Frameworks
 import com.reandroid.common.TableEntryStore
 import com.reandroid.xml.XMLDocument
@@ -122,6 +124,22 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
                 logger.error("Error: ${err.stackTraceToString()}")
             }
         }
+
+        // Scan for @+id registrations.
+        module.apkArchive.listInputSources().forEach {
+            if (it is XMLEncodeSource) {
+                it.xmlSource.xmlDocument.scanIdRegistrations().forEach { attr ->
+                    val name = attr.value.split('/').last()
+                    logger.info("Found id registration: $name")
+                    typeTable["values/ids"]!!.getOrCreateEntry(name).also { entry ->
+                        (entry.tableEntry as ResTableEntry).value.valueAsBoolean = false
+                        logger.warn("name: ${entry.name}")
+                    }
+                    attr.value = "@id/$name"
+                }
+            }
+        }
+
 
         // Update package block name if necessary.
         val resXml = XMLFileEncoder(encodeMaterials).encode(manifestXml)
