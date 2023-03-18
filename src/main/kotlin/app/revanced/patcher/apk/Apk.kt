@@ -364,8 +364,8 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
                     true, -1, // Core count.
                     it, Patcher.dexFileNamer, newDexFile, DexIO.DEFAULT_MAX_DEX_POOL_SIZE, null
                 )
-            }.map {
-                archive.add(ByteInputSource(it.value.readAt(0).use { stream -> stream.readAllBytes() }, it.key))
+            }.forEach { (name, store) ->
+                archive.add(ByteInputSource(store.data, name))
             }
         }
     }
