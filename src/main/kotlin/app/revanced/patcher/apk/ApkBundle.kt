@@ -1,17 +1,9 @@
 package app.revanced.patcher.apk
 
 import app.revanced.patcher.PatcherOptions
-import app.revanced.patcher.apk.Apk.ResourceDecodingMode
 import app.revanced.patcher.logging.Logger
 import com.reandroid.apk.ApkBundle
-import com.reandroid.apk.ApkModuleXmlDecoder
-import com.reandroid.apk.ApkModuleXmlEncoder
-import com.reandroid.archive.ZipAlign
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
-import java.io.File
-import java.nio.file.Files
-import java.nio.file.Paths
-import java.util.stream.Collectors
 
 /**
  * An [Apk] file of type [Apk.Split].
@@ -55,49 +47,23 @@ class ApkBundle(
     }
 
     /**
-     * Refresh updated resources for the files in [ApkBundle].
+     * Refresh some additional resources in the [ApkBundle] that have been patched.
      *
-     * @param options The [PatcherOptions] to write the resources with.
-     * @return A sequence of the [Apk] files which resources are being written.
+     * @return A sequence of the [Apk] files which are being refreshed.
      */
-    internal fun refreshResources(options: PatcherOptions) = sequence {
+    internal fun finalize() = sequence {
         with(base) {
-            refreshResources(options)
+            finalize()
 
             yield(SplitApkResult.Write(this))
         }
 
         split?.all?.forEach { splitApk ->
             with(splitApk) {
-                var exception: Apk.ApkException.Encode? = null
+                finalize()
 
-                try {
-                    refreshResources(options)
-                } catch (writeException: Apk.ApkException.Encode) {
-                    exception = writeException
-                }
-
-                yield(SplitApkResult.Write(this, exception))
+                yield(SplitApkResult.Write(this))
             }
-        }
-    }
-
-    /**
-     * Decode resources for the files in [ApkBundle].
-     *
-     * @param options The [PatcherOptions] to decode the resources with.
-     * @param mode The [Apk.ResourceDecodingMode] to use.
-     * @return A sequence of the [Apk] files which resources are being decoded.
-     */
-    internal fun emitResources(options: PatcherOptions, mode: ResourceDecodingMode) = sequence {
-        with(base) {
-            yield(this)
-            emitResources(options, mode)
-        }
-
-        split?.all?.forEach {
-            yield(it)
-            it.emitResources(options, mode)
         }
     }
 

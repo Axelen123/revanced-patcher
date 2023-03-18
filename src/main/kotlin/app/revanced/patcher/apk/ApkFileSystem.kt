@@ -1,5 +1,6 @@
 package app.revanced.patcher.apk
 
+import app.revanced.patcher.apk.arsc.EncodeManager
 import app.revanced.patcher.logging.Logger
 import app.revanced.patcher.util.InMemoryChannel
 import com.reandroid.apk.xmlencoder.XMLEncodeSource
@@ -80,11 +81,10 @@ class File internal constructor(private val path: String, private val apk: Apk, 
     }
 }
 
-internal class ArchiveCoder(private val path: String, private val apk: Apk) : Coder {
-    private val archivePath = apk.resFileTable?.get(path) ?: path
+internal class ArchiveCoder(private val path: String, private val store: EncodeManager) : Coder {
+    private val archive = store.module.apkArchive
+    private val archivePath = store.resFileTable?.get(path) ?: path
     private val isBinaryXml get() = archivePath.endsWith(".xml") // TODO: figure out why tf get() is needed.
-    private val module = apk.module
-    private val archive = module.apkArchive
     private val source: InputSource? = archive.getInputSource(archivePath)
 
     override fun decode(): ByteArray = if (isBinaryXml) {
@@ -92,23 +92,12 @@ internal class ArchiveCoder(private val path: String, private val apk: Apk) : Co
          * Avoid having to potentially encode and decode the same XML over and over again.
          * This also means we avoid having to encode XML potentially referencing resources that have not been created yet.
          */
-        val xml = if (source is XMLEncodeSource) source.xmlSource.xmlDocument else module.decodeXMLFile(archivePath)
+        val xml =
+            if (source is XMLEncodeSource) source.xmlSource.xmlDocument else store.module.decodeXMLFile(archivePath)
         ByteArrayOutputStream().also {
             xml.save(it, false)
         }.toByteArray()
     } else source!!.openStream().use { it.readAllBytes() }
-
-    /*
-    private fun getTypeBlock() {
-        val qualifiers = path.split("/")[1].split("-").toMutableList()
-        val type = qualifiers.removeAt(0)
-        if (qualifiers.size > 0) {
-            qualifiers.add(0, "")
-        }
-        val key = "values${qualifiers.joinToString("-")}/${type}s"
-        return apk.typeTable[key] ?:
-    }
-     */
 
     override fun encode(contents: ByteArray) {
         val needsRegistration = path.startsWith("res") && !exists()
@@ -119,7 +108,11 @@ internal class ArchiveCoder(private val path: String, private val apk: Apk) : Co
                 qualifiers.add(0, "")
             }
 
-            apk.packageBlock!!.getOrCreate(qualifiers.joinToString("-"), type, Path(path).nameWithoutExtension).also {
+            store.packageBlock!!.getOrCreate(
+                qualifiers.joinToString("-"),
+                type,
+                Path(path).nameWithoutExtension
+            ).also {
                 // it.setValueAsString(path) does not work for some reason...
                 (it.tableEntry as ResTableEntry).value.valueAsString = path
             }
@@ -127,7 +120,7 @@ internal class ArchiveCoder(private val path: String, private val apk: Apk) : Co
         archive.add(
             if (!isBinaryXml) ByteInputSource(contents, archivePath) else {
                 XMLEncodeSource(
-                    apk.encodeMaterials,
+                    store.encodeMaterials,
                     XMLDocumentSource(archivePath, XMLDocument.load(ByteArrayInputStream(contents)))
                 )
             }

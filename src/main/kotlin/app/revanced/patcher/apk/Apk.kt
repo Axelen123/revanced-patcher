@@ -3,26 +3,15 @@
 package app.revanced.patcher.apk
 
 import app.revanced.patcher.Patcher
-import app.revanced.patcher.PatcherOptions
+import app.revanced.patcher.apk.arsc.EncodeManager
 import app.revanced.patcher.logging.Logger
 import app.revanced.patcher.util.ProxyBackedClassList
-import com.reandroid.apk.*
-import com.reandroid.apk.xmlencoder.EncodeException
-import com.reandroid.apk.xmlencoder.ValuesEncoder
-import com.reandroid.apk.xmlencoder.XMLEncodeSource
-import com.reandroid.apk.xmlencoder.XMLFileEncoder
+import com.reandroid.apk.ApkModule
+import com.reandroid.apk.ApkUtil
 import com.reandroid.archive.APKArchive
 import com.reandroid.archive.ByteInputSource
 import com.reandroid.archive.ZipAlign
-import com.reandroid.arsc.chunk.TableBlock
-import com.reandroid.arsc.chunk.TypeBlock
-import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
-import com.reandroid.arsc.value.ResTableEntry
-import com.reandroid.common.Frameworks
-import com.reandroid.common.TableEntryStore
-import com.reandroid.xml.XMLDocument
 import lanchon.multidexlib2.BasicDexEntry
-
 import lanchon.multidexlib2.DexIO
 import lanchon.multidexlib2.MultiDexContainerBackedDexFile
 import lanchon.multidexlib2.MultiDexIO
@@ -32,7 +21,6 @@ import org.jf.dexlib2.dexbacked.DexBackedDexFile
 import org.jf.dexlib2.iface.MultiDexContainer
 import org.jf.dexlib2.writer.io.MemoryDataStore
 import org.w3c.dom.*
-import java.io.ByteArrayInputStream
 import java.io.File
 
 /**
@@ -40,51 +28,40 @@ import java.io.File
  *
  * @param filePath The path to the apk file.
  */
-sealed class Apk(filePath: String, internal val logger: Logger) {
-    /**
-     * The apk file.
-     */
-    open val file = File(filePath)
+sealed class Apk private constructor(internal val module: ApkModule, internal val logger: Logger) {
+    lateinit var path: String
 
-    /**
-     * ARSCLib Apk module.
-     */
-    internal val module = ApkModule.loadApkFile(file, ApkUtil.toModuleName(file)).also { it.setAPKLogger(logger) }
-    internal var manifest = module.androidManifestBlock
-
-    internal val tableBlock: TableBlock? = module.tableBlock
-    internal val packageBlock = tableBlock?.packageArray?.pickOne()
-
-    /**
-     * EntryStore for decoding.
-     */
-    internal val entryStore = TableEntryStore().apply {
-        add(Frameworks.getAndroid())
-        tableBlock?.let { add(it) }
+    constructor(filePath: String, logger: Logger) : this(
+        ApkModule.loadApkFile(
+            File(filePath),
+            ApkUtil.toModuleName(File(filePath))
+        ), logger
+    ) {
+        path = filePath
     }
-    internal var manifestXml = manifest.decodeToXml(entryStore, packageBlock?.id ?: 0)
-    private fun generateTypeTable() = HashMap<String, TypeBlock>().apply {
-        packageBlock?.listAllSpecTypePair()?.forEach {
-            it.listTypeBlocks().forEach { block ->
-                var type = block.typeName
-                if (!type.endsWith("s")) type = "${type}s"
-                val properName = "values${block.qualifiers}/${type}"
-                if (properName.contains("layouts")) logger.info("found: $properName")
-                assert(!this.contains(properName)) { "multiple valid values or something idk" }
-                // block.listEntries(true).forEach { logger.info("entry: ${it.name}, ${it.typeName}") }
-                this[properName] = block
-            }
+
+    init {
+        module.setAPKLogger(logger)
+    }
+
+    override fun toString(): String = module.moduleName
+
+    /**
+     * Encoding manager
+     */
+
+    internal val encodeManager = EncodeManager(module, logger)
+
+    /**
+     * The metadata of the [Apk].
+     */
+    val packageMetadata = PackageMetadata().also {
+        val manifest = encodeManager.manifest
+        if (manifest.versionName != null) {
+            it.packageName = manifest.packageName
+            it.packageVersion = manifest.versionName
         }
     }
-
-    internal var typeTable = generateTypeTable()
-
-    /**
-     * EncodeMaterials for encoding.
-     */
-    internal val encodeMaterials = EncodeMaterials(this)
-
-    internal val valuesEncoder = ValuesEncoder(encodeMaterials)
 
     private val openFiles = mutableSetOf<String>()
 
@@ -99,129 +76,13 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
         openFiles.remove(path)
     }
 
-    private data class DelayedDocument(val qualifiers: String, val type: String, val doc: XMLDocument)
-
-    private val delayedValues = mutableListOf<DelayedDocument>()
-
     /**
-     * Refresh updated resources for an [Apk.file].
-     *
-     * @param options The [PatcherOptions] to write the resources with.
+     * Refresh updated resources for an [Apk].
      */
-    internal open fun refreshResources(options: PatcherOptions) {
-        /*
-        try {
-            val encoder = ApkModuleXmlEncoder()
-            encoder.scanDirectory(getResourceDirectory(options))
-            module = encoder.apkModule
-        } catch (e: Exception) {
-            throw ApkException.Write("Failed to refresh resources: $e", e)
-        }
-         */
+    internal fun finalize() {
         openFiles.forEach { logger.warn("File $it not closed! File modifications will not be applied if you do not close them.") }
-        delayedValues.forEach {
-            encodeValues(it.qualifiers, it.type, it.doc, false)?.let { err ->
-                it.doc.save(File("/tmp/asdf.xml"), true)
-                logger.error("Failed to encode: ${it.type}${it.qualifiers}")
-                logger.error("Error: ${err.stackTraceToString()}")
-            }
-        }
-
-        // Scan for @+id registrations.
-        module.apkArchive.listInputSources().forEach {
-            if (it is XMLEncodeSource) {
-                it.xmlSource.xmlDocument.scanIdRegistrations().forEach { attr ->
-                    val name = attr.value.split('/').last()
-                    logger.info("Found id registration: $name")
-                    typeTable["values/ids"]!!.getOrCreateEntry(name).also { entry ->
-                        (entry.tableEntry as ResTableEntry).value.valueAsBoolean = false
-                        logger.warn("name: ${entry.name}")
-                    }
-                    attr.value = "@id/$name"
-                }
-            }
-        }
-
-
-        // Update package block name if necessary.
-        val resXml = XMLFileEncoder(encodeMaterials).encode(manifestXml)
-        manifest = AndroidManifestBlock()
-        manifest.readBytes(ByteArrayInputStream(resXml.bytes))
-        module.setManifest(manifest)
-        tableBlock?.packageArray?.listItems()?.forEach {
-            logger.warn("${it.name} : ${manifest.packageName}")
-            it.name = manifest.packageName
-        }
+        encodeManager.finalize()
     }
-
-    internal fun getDelayed(qualifiers: String, type: String): XMLDocument? =
-        delayedValues.find { it.type == type && it.qualifiers == qualifiers }?.doc
-
-    // TODO: this feels wrong and hacky...
-    internal fun encodeValues(
-        qualifiers: String,
-        type: String,
-        doc: XMLDocument,
-        encodeDelayedValues: Boolean
-    ): EncodeException? {
-        try {
-            valuesEncoder!!.encodeValuesXml(qualifiers, type, doc)
-            delayedValues.apply {
-                val index = indexOfFirst { it.qualifiers == qualifiers && it.type == type }
-                if (index != -1) {
-                    delayedValues.removeAt(index)
-                }
-            }
-        } catch (e: EncodeException) {
-            if (encodeDelayedValues) {
-                logger.info("Delaying ${type}${qualifiers}")
-                delayedValues.add(DelayedDocument(qualifiers, type, doc))
-            }
-            return e
-        }
-
-        typeTable = generateTypeTable()
-        if (encodeDelayedValues) {
-            delayedValues.forEach {
-                encodeValues(it.qualifiers, it.type, it.doc, false)
-            }
-        }
-        return null
-    }
-
-    /**
-     * The metadata of the [Apk].
-     */
-    val packageMetadata = PackageMetadata()
-
-    init {
-        if (manifest.versionName != null) {
-            packageMetadata.packageName = manifest.packageName
-            packageMetadata.packageVersion = manifest.versionName
-        }
-    }
-
-    /**
-     * A map of resource files from their actual name to their archive name.
-     * Example: res/drawable-hdpi/icon.png -> res/4a.png
-     */
-    internal val resFileTable =
-        if (tableBlock != null) module.listResFiles().associate { "res/${it.buildPath()}" to it.filePath } else null
-
-    data class ResourceElement(val type: String, val name: String, val id: Long)
-
-    // TODO: move this to base only.
-    val resourceMap: List<ResourceElement> = typeTable.flatMap { (type, typeBlock) ->
-        typeBlock.listEntries(true).map {
-            ResourceElement(
-                it.typeName,
-                it.name,
-                it.resourceId.toLong()
-            )
-        }
-    }
-
-    // internal fun getEntry(type: String, name: String): Entry? = typeTable[type]?.entryArray?.listItems()?.find { it.name == name }
 
     /**
      * Open a [app.revanced.patcher.apk.File]
@@ -229,7 +90,7 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
     fun openFile(path: String) = File(
         path, this, when {
             path == "res/values/public.xml" -> throw ApkException.Encode("Editing the resource table is not supported.")
-            path == "AndroidManifest.xml" -> ManifestCoder(this)
+            path == "AndroidManifest.xml" -> ManifestCoder(encodeManager)
             path.startsWith("res/values") -> {
                 val s = path.removePrefix("res/").removeSuffix(".xml") // values-v29/drawables
                 val parsingArray = s.removePrefix("values").split('/')
@@ -238,24 +99,16 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
                     if (it != "plurals") it.removeSuffix("s") else it
                 }
                 ValuesCoder(
-                    typeTable[s],
+                    encodeManager.typeTable[s],
                     qualifiers,
                     type,
-                    this
+                    encodeManager
                 )
             }
 
-            else -> ArchiveCoder(path, this)
+            else -> ArchiveCoder(path, encodeManager)
         }
     )
-
-    /**
-     * Get the resource directory of the apk file.
-     *
-     * @param options The patcher context to resolve the resource directory for the [Apk] file.
-     * @return The resource directory of the [Apk] file.
-     */
-    internal fun getResourceDirectory(options: PatcherOptions) = options.resourceDirectory.resolve(toString())
 
     /**
      * @param out The [File] to write to.
@@ -263,23 +116,6 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
     open fun save(out: File) {
         module.writeApk(out)
         ZipAlign.align4(out)
-    }
-
-    /**
-     * Decode resources for a [Apk].
-     * Note: This function does not respect the patchers [ResourceDecodingMode] :trolley:.
-     *
-     * @param options The [PatcherOptions] to decode the resources with.
-     * @param mode The [ResourceDecodingMode] to use.
-     */
-    internal open fun emitResources(options: PatcherOptions, mode: ResourceDecodingMode) {
-        /*
-        try {
-            ApkModuleXmlDecoder(module).decodeTo(getResourceDirectory(options))
-        } catch (e: Exception) {
-            throw ApkException.Decode("Failed to decode resources", e)
-        }
-         */
     }
 
     /**
@@ -295,27 +131,21 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
          *
          * @param filePath The path to the apk file.
          */
-        class Language(filePath: String, logger: Logger) : Split(filePath, logger) {
-            override fun toString() = "language"
-        }
+        class Language(filePath: String, logger: Logger) : Split(filePath, logger)
 
         /**
          * The split apk file which contains libraries.
          *
          * @param filePath The path to the apk file.
          */
-        class Library(filePath: String, logger: Logger) : Split(filePath, logger) {
-            override fun toString() = "library"
-        }
+        class Library(filePath: String, logger: Logger) : Split(filePath, logger)
 
         /**
          * The split apk file which contains assets.
          *
          * @param filePath The path to the apk file.
          */
-        class Asset(filePath: String, logger: Logger) : Split(filePath, logger) {
-            override fun toString() = "asset"
-        }
+        class Asset(filePath: String, logger: Logger) : Split(filePath, logger)
     }
 
     /**
@@ -329,15 +159,11 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
          * Data of the [Base] apk file.
          */
         internal val bytecodeData = BytecodeData()
-        override fun toString() = "base"
+
+        val resourceMappings = encodeManager.generateResourceMappings()
     }
 
     internal inner class BytecodeData {
-        private fun DexFileInputSource.toDexEntry(container: MultiDexContainer<DexBackedDexFile>) = BasicDexEntry(
-            container,
-            name,
-            openStream().use { RawDexIO.readRawDexFile(it, length, null) })
-
         private val opcodes: Opcodes
 
         /**
@@ -345,9 +171,15 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
          */
         val classes = ProxyBackedClassList(
             MultiDexContainerBackedDexFile(object : MultiDexContainer<DexBackedDexFile> {
-                private val entries = module.listDexFiles().associate {
-                    it.name to it.toDexEntry(this)
-                }
+                /**
+                 * Load all dex files from the [ApkModule] and create an entry for each of them.
+                 */
+                private val entries = module.listDexFiles().map {
+                    BasicDexEntry(
+                        this,
+                        it.name,
+                        it.openStream().use { stream -> RawDexIO.readRawDexFile(stream, it.length, null) })
+                }.associateBy { it.entryName }
 
                 override fun getDexEntryNames() = entries.keys.toList()
                 override fun getEntry(entryName: String) = entries[entryName]
@@ -383,21 +215,6 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
     }
 
     /**
-     * The type of decoding the resources.
-     */
-    internal enum class ResourceDecodingMode {
-        /**
-         * Decode all resources.
-         */
-        FULL,
-
-        /**
-         * Decode the manifest file only.
-         */
-        MANIFEST_ONLY,
-    }
-
-    /**
      * Metadata about an [Apk] file.
      */
     class PackageMetadata {
@@ -415,7 +232,7 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
     }
 
     /**
-     * An exception thrown in [decodeResources] or [writeResources].
+     * An exception thrown in [h].
      *
      * @param message The exception message.
      * @param throwable The corresponding [Throwable].

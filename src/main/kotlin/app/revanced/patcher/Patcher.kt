@@ -7,7 +7,6 @@ import app.revanced.patcher.extensions.PatchExtensions.requiresIntegrations
 import app.revanced.patcher.fingerprint.method.impl.MethodFingerprint.Companion.resolve
 import app.revanced.patcher.patch.*
 import app.revanced.patcher.util.VersionReader
-import com.reandroid.archive.ByteInputSource
 import lanchon.multidexlib2.BasicDexFileNamer
 import java.io.File
 
@@ -19,7 +18,6 @@ class Patcher(private val options: PatcherOptions) {
     private val context = PatcherContext(options)
     private val logger = options.logger
     private var mergeIntegrations = false
-    private var decodingMode = Apk.ResourceDecodingMode.MANIFEST_ONLY
 
     companion object {
         @Suppress("SpellCheckingInspection")
@@ -30,12 +28,6 @@ class Patcher(private val options: PatcherOptions) {
          */
         @JvmStatic
         val version = VersionReader.read()
-    }
-
-    init {
-        options.apkBundle.emitResources(options, Apk.ResourceDecodingMode.FULL).forEach {
-            logger.info("Decoding resources for: $it")
-        }
     }
 
     /**
@@ -50,25 +42,12 @@ class Patcher(private val options: PatcherOptions) {
      * Add [Patch]es to the patcher.
      * @param patches [Patch]es The patches to add.
      */
-    /**
-     * Add [Patch]es to the patcher.
-     * @param patches [Patch]es The patches to add.
-     */
     fun addPatches(patches: Iterable<PatchClass>) {
         /**
          * Returns true if at least one patches or its dependencies matches the given predicate.
          */
         fun PatchClass.anyRecursively(predicate: (PatchClass) -> Boolean): Boolean =
             predicate(this) || dependencies?.any { it.java.anyRecursively(predicate) } == true
-
-
-        // Determine if resource patching is required.
-        for (patch in patches) {
-            if (patch.anyRecursively { ResourcePatch::class.java.isAssignableFrom(it) }) {
-                decodingMode = Apk.ResourceDecodingMode.FULL
-                break
-            }
-        }
 
         // Determine if merging integrations is required.
         for (patch in patches) {
@@ -181,23 +160,21 @@ class Patcher(private val options: PatcherOptions) {
      */
     fun save(): PatcherResult {
         val patchResults = buildList {
-            // if (decodingMode == Apk.ResourceDecodingMode.FULL) {
-                logger.info("Writing patched resources")
-                options.apkBundle.refreshResources(options).forEach { writeResult ->
-                    if (writeResult.exception is Apk.ApkException.Encode) return@forEach
+            logger.info("Writing patched resources")
+            options.apkBundle.finalize().forEach { writeResult ->
+                if (writeResult.exception is Apk.ApkException.Encode) return@forEach
 
-                    val patch = writeResult.apk.let {
-                        when (it) {
-                            is Apk.Base -> PatcherResult.Patch.Base(it)
-                            is Apk.Split -> PatcherResult.Patch.Split(it)
-                        }
+                val patch = writeResult.apk.let {
+                    when (it) {
+                        is Apk.Base -> PatcherResult.Patch.Base(it)
+                        is Apk.Split -> PatcherResult.Patch.Split(it)
                     }
-
-                    add(patch)
-
-                    logger.info("Patched resources written for ${writeResult.apk} apk file")
                 }
-            // }
+
+                add(patch)
+
+                logger.info("Patched resources written for ${writeResult.apk} apk file")
+            }
         }
 
         options.apkBundle.base.apply {

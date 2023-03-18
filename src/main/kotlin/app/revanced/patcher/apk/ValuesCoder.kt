@@ -1,5 +1,6 @@
 package app.revanced.patcher.apk
 
+import app.revanced.patcher.apk.arsc.EncodeManager
 import com.reandroid.apk.XmlHelper
 import com.reandroid.apk.xmldecoder.XMLBagDecoder
 import com.reandroid.arsc.chunk.TypeBlock
@@ -14,14 +15,14 @@ internal class ValuesCoder(
     private val typeBlock: TypeBlock?,
     private val qualifiers: String,
     private val type: String,
-    internal val apk: Apk
+    private val store: EncodeManager,
 ) :
     Coder {
     private val decodedEntries = HashMap<Int, Set<ResConfig>>()
-    private val xmlBagDecoder = XMLBagDecoder(apk.entryStore)
+    private val xmlBagDecoder = XMLBagDecoder(store.entryStore)
     override fun exists() = typeBlock != null
     override fun decode(): ByteArray = ByteArrayOutputStream(256).also {
-        (apk.getDelayed(qualifiers, type) ?: XMLDocument("resources").apply {
+        XMLDocument("resources").apply {
             typeBlock!!.listEntries(true).forEach { entry ->
                 if (!containsDecodedEntry(entry)) {
                     documentElement.addChild(decodeValue(entry))
@@ -31,7 +32,8 @@ internal class ValuesCoder(
             if (documentElement.childesCount == 0) {
                 return@also
             }
-        }).save(it, false)
+            save(it, false)
+        }
     }.toByteArray()
 
     private fun containsDecodedEntry(entry: Entry): Boolean {
@@ -54,7 +56,7 @@ internal class ValuesCoder(
                 )
             } else {
                 val value = com.reandroid.arsc.decoder.ValueDecoder.decodeEntryValue(
-                    apk.entryStore, entry.packageBlock, resValue.valueType, resValue.data
+                    store.entryStore, entry.packageBlock, resValue.valueType, resValue.data
                 )
                 element.textContent = value
             }
@@ -66,6 +68,8 @@ internal class ValuesCoder(
     }
 
     override fun encode(contents: ByteArray) {
-        apk.encodeValues(qualifiers, type, XMLDocument.load(ByteArrayInputStream(contents)), true)
+        store.valuesEncoder.encodeValuesXml(type, qualifiers, XMLDocument.load(ByteArrayInputStream(contents)))
+        val t = if (!type.endsWith("s")) "${type}s" else type
+        store.typeTable["values${qualifiers}/${t}"] = store.packageBlock!!.getOrCreateSpecType(type).getOrCreateTypeBlock(qualifiers)
     }
 }
