@@ -17,17 +17,19 @@ import com.reandroid.archive.ZipAlign
 import com.reandroid.arsc.chunk.TableBlock
 import com.reandroid.arsc.chunk.TypeBlock
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
-import com.reandroid.arsc.chunk.xml.ResXmlDocument
 import com.reandroid.arsc.value.ResTableEntry
 import com.reandroid.common.Frameworks
 import com.reandroid.common.TableEntryStore
 import com.reandroid.xml.XMLDocument
-import com.reandroid.xml.source.XMLDocumentSource
-import com.reandroid.xml.source.XMLSource
+import lanchon.multidexlib2.BasicDexEntry
 
 import lanchon.multidexlib2.DexIO
+import lanchon.multidexlib2.MultiDexContainerBackedDexFile
 import lanchon.multidexlib2.MultiDexIO
+import lanchon.multidexlib2.RawDexIO
 import org.jf.dexlib2.Opcodes
+import org.jf.dexlib2.dexbacked.DexBackedDexFile
+import org.jf.dexlib2.iface.MultiDexContainer
 import org.jf.dexlib2.writer.io.MemoryDataStore
 import org.w3c.dom.*
 import java.io.ByteArrayInputStream
@@ -331,15 +333,25 @@ sealed class Apk(filePath: String, internal val logger: Logger) {
     }
 
     internal inner class BytecodeData {
+        private fun DexFileInputSource.toDexEntry(container: MultiDexContainer<DexBackedDexFile>) = BasicDexEntry(
+            container,
+            name,
+            openStream().use { RawDexIO.readRawDexFile(it, length, null) })
+
         private val opcodes: Opcodes
 
         /**
          * The classes and proxied classes of the [Base] apk file.
          */
         val classes = ProxyBackedClassList(
-            MultiDexIO.readDexFile(
-                true, file, Patcher.dexFileNamer, null, null
-            ).also { opcodes = it.opcodes }.classes
+            MultiDexContainerBackedDexFile(object : MultiDexContainer<DexBackedDexFile> {
+                private val entries = module.listDexFiles().associate {
+                    it.name to it.toDexEntry(this)
+                }
+
+                override fun getDexEntryNames() = entries.keys.toList()
+                override fun getEntry(entryName: String) = entries[entryName]
+            }).also { opcodes = it.opcodes }.classes
         )
 
         /**
