@@ -58,9 +58,9 @@ internal data class EncodeManager(
 
     val encodeMaterials =
         EncodeMaterials().apply {
-            currentPackage = packageBlock
             setAPKLogger(logger)
             if (tableBlock != null) {
+                currentPackage = packageBlock
                 addPackageIds(ResourceIds().apply { loadPackageBlock(packageBlock) }.table.listPackages()[0])
                 tableBlock.frameWorks.forEach {
                     if (it is FrameworkTable) {
@@ -68,10 +68,8 @@ internal data class EncodeManager(
                     }
                 }
             } else {
-                // Initialize with an empty Package/TableBlock, so we can still encode the manifest.
-                val tableBlock = TableBlock()
-                tableBlock.packageArray.add(PackageBlock())
-                currentPackage = tableBlock.pickOne()
+                // Initialize with an empty Package/TableBlock, so we can still encode the manifest (we have to create a TableBlock to avoid NPEs).
+                currentPackage = TableBlock().apply { packageArray.add(PackageBlock()) }.pickOne()
                 addFramework(frameworkTable)
             }
         }
