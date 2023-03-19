@@ -29,6 +29,10 @@ import java.io.File
 sealed class Apk private constructor(internal val module: ApkModule, internal val logger: Logger) {
     lateinit var path: String
 
+    companion object {
+        const val MANIFEST_NAME = "AndroidManifest.xml"
+    }
+
     /**
      * The apk file that is to be patched.
      *
@@ -59,7 +63,7 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
      * The metadata of the [Apk].
      */
     val packageMetadata = PackageMetadata().also {
-        val manifest = encodeManager.manifest
+        val manifest = module.androidManifestBlock
         if (manifest.versionName != null) {
             it.packageName = manifest.packageName
             it.packageVersion = manifest.versionName
@@ -90,33 +94,30 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
     /**
      * Open a [app.revanced.patcher.apk.File]
      */
-    fun openFile(path: String) = File(
-        path, this, when {
-            path == "res/values/public.xml" -> throw ApkException.Encode("Editing the resource table is not supported.")
-            path.startsWith("res/values") -> {
-                val s = path.removePrefix("res/").removeSuffix(".xml") // values-v29/drawables
-                val parsingArray = s.removePrefix("values").split('/')
-                val qualifiers = parsingArray.first()
-                val type = parsingArray.last().let {
-                    if (it != "plurals") it.removeSuffix("s") else it
+    fun openFile(path: String): app.revanced.patcher.apk.File {
+        val index = getTypeIndex(path)
+        return File(
+            path, this, when {
+                path == "res/values/public.xml" -> throw ApkException.Encode("Editing the resource table is not supported.")
+                path.startsWith("res/values") -> {
+                    val (qualifiers, type) = index!!
+                    ValuesBackend(
+                        qualifiers,
+                        type,
+                        encodeManager
+                    )
                 }
-                ValuesBackend(
-                    encodeManager.typeTable[s],
-                    qualifiers,
-                    type,
-                    encodeManager
-                )
+
+                path.endsWith(".xml") -> ArchiveBackend.XML(path, index, encodeManager)
+                else -> ArchiveBackend.Raw(path, index, encodeManager)
             }
-            path.endsWith(".xml") -> ArchiveBackend.XML(path,  encodeManager)
-            else -> ArchiveBackend.Raw(path, encodeManager)
-        }
-    )
+        )
+    }
 
     /**
      * @param out The [File] to write to.
      */
-    open fun save(out: File) {
-        module.apkArchive.getInputSource("AndroidManifest.xml").let { logger.info("hhh: ${it}") }
+    fun save(out: File) {
         module.writeApk(out)
         ZipAlign.align4(out)
     }
@@ -163,7 +164,10 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
          */
         internal val bytecodeData = BytecodeData()
 
-        val resourceMappings = encodeManager.generateResourceMappings()
+        /**
+         * A list of all [ResourceElement]s. Generating this is expensive, so it should only be used when needed.
+         */
+        val resourceMappings by lazy { encodeManager.generateResourceMappings()!! }
     }
 
     internal inner class BytecodeData {

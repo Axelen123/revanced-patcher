@@ -1,31 +1,30 @@
 package app.revanced.patcher.apk.arsc
 
+import app.revanced.patcher.apk.Apk
 import app.revanced.patcher.logging.Logger
 import com.reandroid.apk.AndroidFrameworks
 import com.reandroid.apk.ApkModule
 import com.reandroid.apk.ResourceIds
 import com.reandroid.apk.xmlencoder.EncodeMaterials
+import com.reandroid.apk.xmlencoder.EncodeUtil
 import com.reandroid.apk.xmlencoder.ValuesEncoder
 import com.reandroid.apk.xmlencoder.XMLEncodeSource
 import com.reandroid.apk.xmlencoder.XMLFileEncoder
 import com.reandroid.arsc.chunk.PackageBlock
 import com.reandroid.arsc.chunk.TableBlock
+import com.reandroid.arsc.chunk.TypeBlock
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
 import com.reandroid.arsc.util.FrameworkTable
 import com.reandroid.arsc.value.ResTableEntry
 import com.reandroid.common.TableEntryStore
 import com.reandroid.xml.XMLDocument
 import java.io.ByteArrayInputStream
+import java.io.File
 
 data class ResourceElement(val type: String, val name: String, val id: Long)
 
 val frameworkTable: FrameworkTable = AndroidFrameworks.getLatest().tableBlock
-val manifestEncodeMaterials = EncodeMaterials().apply {
-    val tableBlock = TableBlock()
-    tableBlock.packageArray.add(PackageBlock())
-    currentPackage = tableBlock.pickOne()
-    addFramework(frameworkTable)
-}
+
 
 internal fun XMLDocument.scanIdRegistrations() = sequence {
     val elements = mutableListOf(documentElement)
@@ -36,39 +35,47 @@ internal fun XMLDocument.scanIdRegistrations() = sequence {
     }
 }
 
+internal fun getTypeIndex(s: String): Pair<String, String>? {
+    if (!s.startsWith("res")) {
+        return null
+    }
+    val file = File(s)
+    return if (s.startsWith("res/values")) EncodeUtil.getQualifiersFromValuesXml(file) to EncodeUtil.getTypeNameFromValuesXml(
+        file
+    ) else EncodeUtil.getQualifiersFromResFile(file) to EncodeUtil.getTypeNameFromResFile(file)
+}
+
 internal data class EncodeManager(
     val module: ApkModule,
     val logger: Logger,
 ) {
-    var manifest: AndroidManifestBlock = module.androidManifestBlock
     private val tableBlock: TableBlock? = module.tableBlock
     val packageBlock = tableBlock?.pickOne()
     val entryStore = TableEntryStore().apply {
         add(frameworkTable)
         tableBlock?.let { add(it) }
     }
-    val typeTable by lazy {
-        packageBlock?.listAllSpecTypePair()?.flatMap {
-            it.listTypeBlocks().map { block ->
-                var type = block.typeName
-                if (!type.endsWith("s")) type = "${type}s"
-                "values${block.qualifiers}/${type}" to block
-            }
-        }?.toMap()?.toMutableMap() ?: HashMap()
-    }
+
     val encodeMaterials =
-        tableBlock?.let { table ->
-            EncodeMaterials().apply {
-                currentPackage = packageBlock
+        EncodeMaterials().apply {
+            currentPackage = packageBlock
+            setAPKLogger(logger)
+            if (tableBlock != null) {
                 addPackageIds(ResourceIds().apply { loadPackageBlock(packageBlock) }.table.listPackages()[0])
-                setAPKLogger(logger)
-                table.frameWorks.forEach {
+                tableBlock.frameWorks.forEach {
                     if (it is FrameworkTable) {
                         addFramework(it)
                     }
                 }
+            } else {
+                // Initialize with an empty Package/TableBlock, so we can still encode the manifest.
+                val tableBlock = TableBlock()
+                tableBlock.packageArray.add(PackageBlock())
+                currentPackage = tableBlock.pickOne()
+                addFramework(frameworkTable)
             }
         }
+
     val valuesEncoder = ValuesEncoder(encodeMaterials)
 
     /**
@@ -77,15 +84,12 @@ internal data class EncodeManager(
      */
     val resFileTable = module.listResFiles().associate { "res/${it.buildPath()}" to it.filePath }
 
-    fun generateResourceMappings() = typeTable.flatMap { (_, typeBlock) ->
-        typeBlock.listEntries(true).map {
-            ResourceElement(
-                it.typeName,
-                it.name,
-                it.resourceId.toLong()
-            )
-        }
-    }
+    fun generateResourceMappings() =
+        packageBlock?.listAllSpecTypePair()?.flatMap { it.listTypeBlocks() }?.flatMap { it.listEntries(true) }
+            ?.map { ResourceElement(it.typeName, it.name, it.resourceId.toLong()) }
+
+    fun findTypeBlock(qualifiers: String, type: String): TypeBlock? =
+        packageBlock?.listAllSpecTypePair()?.find { it.typeName == type }?.getTypeBlock(qualifiers)
 
     fun finalize() {
         // Scan for @+id registrations.
@@ -94,17 +98,22 @@ internal data class EncodeManager(
                 it.xmlSource.xmlDocument.scanIdRegistrations().forEach { attr ->
                     val name = attr.value.split('/').last()
                     logger.trace("Registering ID: $name")
-                    typeTable["values/ids"]!!.getOrCreateEntry(name).also { entry ->
-                        entry.setValueAsBoolean(false)
+                    packageBlock!!.getOrCreate("", "id", name).also { entry ->
+                        (entry.tableEntry as ResTableEntry).value.valueAsBoolean = false
                     }
                     attr.value = "@id/$name"
                 }
             }
         }
 
+        val updatedManifest =
+            module.apkArchive.getInputSource(Apk.MANIFEST_NAME).openStream().use { AndroidManifestBlock.load(it) }
+        module.setManifest(updatedManifest)
+        module.androidManifestBlock.refresh()
+
         // Update package block name if necessary.
-        tableBlock?.packageArray?.listItems()?.forEach {
-            it.name = manifest.packageName
+        packageBlock?.let {
+            it.name = updatedManifest.packageName
         }
     }
 }
