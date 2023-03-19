@@ -3,7 +3,11 @@
 package app.revanced.patcher.apk
 
 import app.revanced.patcher.Patcher
+import app.revanced.patcher.apk.arsc.*
+import app.revanced.patcher.apk.arsc.ArchiveBackend
 import app.revanced.patcher.apk.arsc.EncodeManager
+import app.revanced.patcher.apk.arsc.ManifestBackend
+import app.revanced.patcher.apk.arsc.ValuesBackend
 import app.revanced.patcher.logging.Logger
 import app.revanced.patcher.util.ProxyBackedClassList
 import com.reandroid.apk.ApkModule
@@ -23,14 +27,15 @@ import org.jf.dexlib2.writer.io.MemoryDataStore
 import org.w3c.dom.*
 import java.io.File
 
-/**
- * The apk file that is to be patched.
- *
- * @param filePath The path to the apk file.
- */
+
 sealed class Apk private constructor(internal val module: ApkModule, internal val logger: Logger) {
     lateinit var path: String
 
+    /**
+     * The apk file that is to be patched.
+     *
+     * @param filePath The path to the apk file.
+     */
     constructor(filePath: String, logger: Logger) : this(
         ApkModule.loadApkFile(
             File(filePath),
@@ -90,7 +95,7 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
     fun openFile(path: String) = File(
         path, this, when {
             path == "res/values/public.xml" -> throw ApkException.Encode("Editing the resource table is not supported.")
-            path == "AndroidManifest.xml" -> ManifestCoder(encodeManager)
+            // path == "AndroidManifest.xml" -> ManifestBackend(encodeManager)
             path.startsWith("res/values") -> {
                 val s = path.removePrefix("res/").removeSuffix(".xml") // values-v29/drawables
                 val parsingArray = s.removePrefix("values").split('/')
@@ -98,15 +103,15 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
                 val type = parsingArray.last().let {
                     if (it != "plurals") it.removeSuffix("s") else it
                 }
-                ValuesCoder(
+                ValuesBackend(
                     encodeManager.typeTable[s],
                     qualifiers,
                     type,
                     encodeManager
                 )
             }
-
-            else -> ArchiveCoder(path, encodeManager)
+            path.endsWith(".xml") -> XmlBackend(path,  encodeManager)
+            else -> ArchiveBackend(path, encodeManager)
         }
     )
 

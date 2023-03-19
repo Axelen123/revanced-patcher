@@ -1,6 +1,5 @@
 package app.revanced.patcher.apk.arsc
 
-import app.revanced.patcher.apk.scanIdRegistrations
 import app.revanced.patcher.logging.Logger
 import com.reandroid.apk.AndroidFrameworks
 import com.reandroid.apk.ApkModule
@@ -26,6 +25,15 @@ val manifestEncodeMaterials = EncodeMaterials().apply {
     tableBlock.packageArray.add(PackageBlock())
     currentPackage = tableBlock.pickOne()
     addFramework(frameworkTable)
+}
+
+internal fun XMLDocument.scanIdRegistrations() = sequence {
+    val elements = mutableListOf(documentElement)
+    while (elements.size != 0) {
+        val current = elements.removeAt(elements.size - 1)
+        yieldAll(current.listAttributes().filter { it.value.startsWith("@+id/") })
+        elements.addAll(current.listChildElements())
+    }
 }
 
 internal data class EncodeManager(
@@ -96,11 +104,13 @@ internal data class EncodeManager(
             }
         }
 
-        // Update package block name if necessary.
+        /*
         val resXml = XMLFileEncoder(encodeMaterials ?: manifestEncodeMaterials).encode(manifestXml)
         manifest = AndroidManifestBlock()
         manifest.readBytes(ByteArrayInputStream(resXml.bytes))
         module.setManifest(manifest)
+         */
+        // Update package block name if necessary.
         tableBlock?.packageArray?.listItems()?.forEach {
             it.name = manifest.packageName
         }
