@@ -18,8 +18,6 @@ import java.io.ByteArrayOutputStream
 import kotlin.io.path.Path
 import kotlin.io.path.nameWithoutExtension
 
-// TODO: there is a bug caused by the commit that reorganized these... I should try bytecode-only patching and see if that still works.
-
 internal sealed interface FileBackend {
     fun load(): ByteArray
     fun save(contents: ByteArray)
@@ -36,6 +34,7 @@ internal sealed class ArchiveBackend(private val path: String, protected val sto
 
     override fun exists() = source != null
 
+    // TODO: find the bug present in this function.
     protected fun saveInputSource(src: InputSource) {
         archive.add(src)
         // Register the file in the resource table if needed.
@@ -45,12 +44,13 @@ internal sealed class ArchiveBackend(private val path: String, protected val sto
             if (qualifiers.size > 0) {
                 qualifiers.add(0, "")
             }
-            store.logger.error("registering: $qualifiers , $type")
+            val name = Path(path).nameWithoutExtension
+            store.logger.error("Registering: $qualifiers , $type : $name")
 
             store.packageBlock!!.getOrCreate(
                 qualifiers.joinToString("-"),
                 type,
-                Path(path).nameWithoutExtension
+                name
             ).also {
                 it.setValueAsString(path)
             }
