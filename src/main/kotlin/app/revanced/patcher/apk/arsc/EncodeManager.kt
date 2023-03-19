@@ -104,12 +104,11 @@ internal data class EncodeManager(
             }
         }
 
+        // Update manifest and package block name.
         val updatedManifest =
             module.apkArchive.getInputSource(Apk.MANIFEST_NAME).openStream().use { AndroidManifestBlock.load(it) }
         module.setManifest(updatedManifest)
         module.androidManifestBlock.refresh()
-
-        // Update package block name if necessary.
         packageBlock?.let {
             it.name = updatedManifest.packageName
         }
