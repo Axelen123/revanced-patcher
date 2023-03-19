@@ -47,7 +47,6 @@ internal data class EncodeManager(
         add(frameworkTable)
         tableBlock?.let { add(it) }
     }
-    var manifestXml: XMLDocument = manifest.decodeToXml(entryStore, packageBlock?.id ?: 0)
     val typeTable by lazy {
         packageBlock?.listAllSpecTypePair()?.flatMap {
             it.listTypeBlocks().map { block ->
@@ -94,22 +93,15 @@ internal data class EncodeManager(
             if (it is XMLEncodeSource) {
                 it.xmlSource.xmlDocument.scanIdRegistrations().forEach { attr ->
                     val name = attr.value.split('/').last()
-                    logger.info("Found id registration: $name")
+                    logger.trace("Registering ID: $name")
                     typeTable["values/ids"]!!.getOrCreateEntry(name).also { entry ->
-                        (entry.tableEntry as ResTableEntry).value.valueAsBoolean = false
-                        logger.warn("name: ${entry.name}")
+                        entry.setValueAsBoolean(false)
                     }
                     attr.value = "@id/$name"
                 }
             }
         }
 
-        /*
-        val resXml = XMLFileEncoder(encodeMaterials ?: manifestEncodeMaterials).encode(manifestXml)
-        manifest = AndroidManifestBlock()
-        manifest.readBytes(ByteArrayInputStream(resXml.bytes))
-        module.setManifest(manifest)
-         */
         // Update package block name if necessary.
         tableBlock?.packageArray?.listItems()?.forEach {
             it.name = manifest.packageName

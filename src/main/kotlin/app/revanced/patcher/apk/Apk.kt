@@ -6,7 +6,6 @@ import app.revanced.patcher.Patcher
 import app.revanced.patcher.apk.arsc.*
 import app.revanced.patcher.apk.arsc.ArchiveBackend
 import app.revanced.patcher.apk.arsc.EncodeManager
-import app.revanced.patcher.apk.arsc.ManifestBackend
 import app.revanced.patcher.apk.arsc.ValuesBackend
 import app.revanced.patcher.logging.Logger
 import app.revanced.patcher.util.ProxyBackedClassList
@@ -20,7 +19,6 @@ import lanchon.multidexlib2.DexIO
 import lanchon.multidexlib2.MultiDexContainerBackedDexFile
 import lanchon.multidexlib2.MultiDexIO
 import lanchon.multidexlib2.RawDexIO
-import org.jf.dexlib2.Opcodes
 import org.jf.dexlib2.dexbacked.DexBackedDexFile
 import org.jf.dexlib2.iface.MultiDexContainer
 import org.jf.dexlib2.writer.io.MemoryDataStore
@@ -85,7 +83,7 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
      * Refresh updated resources for an [Apk].
      */
     internal fun finalize() {
-        openFiles.forEach { logger.warn("File $it not closed! File modifications will not be applied if you do not close them.") }
+        openFiles.forEach { logger.warn("File $it was never closed! File modifications will not be applied if you do not close them.") }
         encodeManager.finalize()
     }
 
@@ -95,7 +93,6 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
     fun openFile(path: String) = File(
         path, this, when {
             path == "res/values/public.xml" -> throw ApkException.Encode("Editing the resource table is not supported.")
-            // path == "AndroidManifest.xml" -> ManifestBackend(encodeManager)
             path.startsWith("res/values") -> {
                 val s = path.removePrefix("res/").removeSuffix(".xml") // values-v29/drawables
                 val parsingArray = s.removePrefix("values").split('/')
@@ -110,8 +107,8 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
                     encodeManager
                 )
             }
-            path.endsWith(".xml") -> XmlBackend(path,  encodeManager)
-            else -> ArchiveBackend(path, encodeManager)
+            path.endsWith(".xml") -> ArchiveBackend.XML(path,  encodeManager)
+            else -> ArchiveBackend.Raw(path, encodeManager)
         }
     )
 
@@ -119,6 +116,7 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
      * @param out The [File] to write to.
      */
     open fun save(out: File) {
+        module.apkArchive.getInputSource("AndroidManifest.xml").let { logger.info("hhh: ${it}") }
         module.writeApk(out)
         ZipAlign.align4(out)
     }
