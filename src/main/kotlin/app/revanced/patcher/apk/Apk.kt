@@ -169,27 +169,27 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
     }
 
     internal inner class BytecodeData {
-        private val opcodes: Opcodes
+        private val dexFile = MultiDexContainerBackedDexFile(object : MultiDexContainer<DexBackedDexFile> {
+            /**
+             * Load all dex files from the [ApkModule] and create an entry for each of them.
+             */
+            private val entries = module.listDexFiles().map {
+                module.apkArchive.remove(it.name)
+                BasicDexEntry(
+                    this,
+                    it.name,
+                    it.openStream().use { stream -> RawDexIO.readRawDexFile(stream, it.length, null) })
+            }.associateBy { it.entryName }
+
+            override fun getDexEntryNames() = entries.keys.toList()
+            override fun getEntry(entryName: String) = entries[entryName]
+        })
+        private val opcodes = dexFile.opcodes
 
         /**
          * The classes and proxied classes of the [Base] apk file.
          */
-        val classes = ProxyBackedClassList(
-            MultiDexContainerBackedDexFile(object : MultiDexContainer<DexBackedDexFile> {
-                /**
-                 * Load all dex files from the [ApkModule] and create an entry for each of them.
-                 */
-                private val entries = module.listDexFiles().map {
-                    BasicDexEntry(
-                        this,
-                        it.name,
-                        it.openStream().use { stream -> RawDexIO.readRawDexFile(stream, it.length, null) })
-                }.associateBy { it.entryName }
-
-                override fun getDexEntryNames() = entries.keys.toList()
-                override fun getEntry(entryName: String) = entries[entryName]
-            }).also { opcodes = it.opcodes }.classes
-        )
+        val classes = ProxyBackedClassList(dexFile.classes)
 
         /**
          * Write [classes] to the [APKArchive].
