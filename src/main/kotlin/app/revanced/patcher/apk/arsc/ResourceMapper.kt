@@ -7,7 +7,7 @@ import com.reandroid.arsc.chunk.TypeBlock
  * Used for finding resource IDs.
  */
 class ResourceMapper(packageBlock: PackageBlock) {
-    class NotFoundException(val type: String, val name: String) : Exception() {
+    class ResourceNotFoundException(val type: String, val name: String) : Exception() {
         override fun toString() = "Could not find ID for resource \"${name}\" of type \"${type}\""
     }
 
@@ -22,5 +22,5 @@ class ResourceMapper(packageBlock: PackageBlock) {
     private fun TypeBlock.findId(name: String) = listEntries().find { it.name == name }?.resourceId?.toLong()
 
     fun find(type: String, name: String) =
-        types[type]?.listTypeBlocks()?.firstNotNullOfOrNull { it.findId(name) } ?: throw NotFoundException(type, name)
+        types[type]?.listTypeBlocks()?.firstNotNullOfOrNull { it.findId(name) } ?: throw ResourceNotFoundException(type, name)
 }
