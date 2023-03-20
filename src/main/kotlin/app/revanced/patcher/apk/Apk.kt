@@ -53,11 +53,17 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
 
     override fun toString(): String = module.moduleName
 
+
+    /**
+     * A [ResourceMapper].
+     */
+    internal val mapper = module.tableBlock?.pickOne()?.let { ResourceMapper(it) }
+
     /**
      * Encoding manager
      */
 
-    internal val encodeManager = EncodeManager(module, logger)
+    internal val encodeManager = EncodeManager(module, logger, mapper)
 
     /**
      * The metadata of the [Apk].
@@ -163,11 +169,6 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
          * Data of the [Base] apk file.
          */
         internal val bytecodeData = BytecodeData()
-
-        /**
-         * A list of all [ResourceElement]s. Generating this is expensive, so it should only be used when needed.
-         */
-        val resourceMappings by lazy { encodeManager.generateResourceMappings()!! }
     }
 
     internal inner class BytecodeData {

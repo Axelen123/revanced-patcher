@@ -48,6 +48,7 @@ internal fun getTypeIndex(s: String): Pair<String, String>? {
 internal data class EncodeManager(
     val module: ApkModule,
     val logger: Logger,
+    val mapper: ResourceMapper?,
 ) {
     private val tableBlock: TableBlock? = module.tableBlock
     val packageBlock = tableBlock?.pickOne()
@@ -82,12 +83,7 @@ internal data class EncodeManager(
      */
     val resFileTable = module.listResFiles().associate { "res/${it.buildPath()}" to it.filePath }
 
-    fun generateResourceMappings() =
-        packageBlock?.listAllSpecTypePair()?.flatMap { it.listTypeBlocks() }?.flatMap { it.listEntries(true) }
-            ?.map { ResourceElement(it.typeName, it.name, it.resourceId.toLong()) }
-
-    fun findTypeBlock(qualifiers: String, type: String): TypeBlock? =
-        packageBlock?.listAllSpecTypePair()?.find { it.typeName == type }?.getTypeBlock(qualifiers)
+    fun findTypeBlock(qualifiers: String, type: String) = mapper?.types?.get(type)?.getTypeBlock(qualifiers)
 
     fun finalize() {
         // Scan for @+id registrations.

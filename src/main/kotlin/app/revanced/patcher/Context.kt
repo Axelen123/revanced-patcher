@@ -34,6 +34,11 @@ class BytecodeContext internal constructor(options: PatcherOptions) : Context {
     val classes = options.apkBundle.base.bytecodeData.classes
 
     /**
+     * A [ResourceMapper]
+     */
+    val mapper = options.apkBundle.base.mapper!!
+
+    /**
      * Create a [MethodWalker] instance for the current [BytecodeContext].
      *
      * @param startMethod The method to start at.
@@ -56,6 +61,11 @@ class ResourceContext internal constructor(private val options: PatcherOptions) 
     val apkBundle = options.apkBundle
 
     /**
+     * A [ResourceMapper]
+     */
+    val mapper = apkBundle.base.mapper!!
+
+    /**
      * Get a file from the resources from the [Apk].
      *
      * @param path The path of the resource file.
@@ -72,7 +82,7 @@ class ResourceContext internal constructor(private val options: PatcherOptions) 
     ): Path = throw Error("dead")
 
     fun openFile(path: String, vararg contexts: Apk? = arrayOf(apkBundle.base, apkBundle.split?.asset)) =
-        contexts.firstNotNullOfOrNull { it?.openFile(path)?.takeIf { it.exists } }
+        contexts.firstNotNullOfOrNull { apk -> apk?.openFile(path)?.takeIf { it.exists } }
 
     /**
      * Open an [DomFileEditor] for a given DOM file.
