@@ -11,15 +11,16 @@ class ResourceMapper(packageBlock: PackageBlock) {
         override fun toString() = "Could not find ID for resource \"${name}\" of type \"${type}\""
     }
 
-    internal val types = packageBlock.listAllSpecTypePair().associateBy { it.typeName }
+    internal val types = packageBlock.listAllSpecTypePair().associateBy {
+        it.removeNullEntries(0)
+        it.removeEmptyTypeBlocks()
+        it.sortTypes()
 
-    private fun TypeBlock.findId(name: String) = listEntries(true).find { it.name == name }?.resourceId?.toLong()
+        it.typeName
+    }
 
-    fun find(type: String, name: String) = run {
-        val spec = types[type] ?: return@run null
+    private fun TypeBlock.findId(name: String) = listEntries().find { it.name == name }?.resourceId?.toLong()
 
-        // Generally a good first candidate.
-        val typeBlock = spec.getTypeBlock("") ?: spec.listTypeBlocks().firstOrNull() ?: return@run null
-        return@run typeBlock.findId(name) ?: spec.listTypeBlocks().firstNotNullOfOrNull { it.findId(name) }
-    } ?: throw NotFoundException(type, name)
+    fun find(type: String, name: String) =
+        types[type]?.listTypeBlocks()?.firstNotNullOfOrNull { it.findId(name) } ?: throw NotFoundException(type, name)
 }
