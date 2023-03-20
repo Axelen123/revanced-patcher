@@ -3,13 +3,10 @@ package app.revanced.patcher.apk.arsc
 import app.revanced.patcher.apk.Apk
 import com.reandroid.apk.XmlHelper
 import com.reandroid.apk.xmldecoder.XMLBagDecoder
-import com.reandroid.apk.xmlencoder.EncodeMaterials
 import com.reandroid.apk.xmlencoder.XMLEncodeSource
 import com.reandroid.archive.APKArchive
 import com.reandroid.archive.ByteInputSource
 import com.reandroid.archive.InputSource
-import com.reandroid.arsc.chunk.PackageBlock
-import com.reandroid.arsc.chunk.TableBlock
 import com.reandroid.arsc.value.*
 import com.reandroid.xml.XMLAttribute
 import com.reandroid.xml.XMLDocument
