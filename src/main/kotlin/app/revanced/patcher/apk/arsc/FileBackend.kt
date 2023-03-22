@@ -7,6 +7,7 @@ import com.reandroid.apk.xmlencoder.XMLEncodeSource
 import com.reandroid.archive.APKArchive
 import com.reandroid.archive.ByteInputSource
 import com.reandroid.archive.InputSource
+import com.reandroid.arsc.chunk.TypeBlock
 import com.reandroid.arsc.value.*
 import com.reandroid.xml.XMLAttribute
 import com.reandroid.xml.XMLDocument
@@ -109,18 +110,18 @@ internal class ValuesBackend(
     private val xmlBagDecoder = XMLBagDecoder(store.entryStore)
 
     override fun exists() = store.findTypeBlock(qualifiers, type) != null
+
+    private fun getOrCreateTypeBlock(): TypeBlock =
+        store.packageBlock!!.getOrCreateSpecType(type).getOrCreateTypeBlock(qualifiers)
+
     override fun load(): ByteArray = ByteArrayOutputStream(256).also {
         XMLDocument("resources").apply {
-            store.packageBlock!!.getOrCreateSpecType(type).getOrCreateTypeBlock(qualifiers).listEntries(true)
+            getOrCreateTypeBlock().listEntries(true)
                 .forEach { entry ->
                     if (!containsDecodedEntry(entry)) {
                         documentElement.addChild(decodeValue(entry))
                     }
                 }
-
-            if (documentElement.childesCount == 0) {
-                return@also
-            }
             save(it, false)
         }
     }.toByteArray()
@@ -156,6 +157,5 @@ internal class ValuesBackend(
         return element
     }
 
-    override fun save(contents: ByteArray) =
-        store.valuesEncoder.encodeValuesXml(type, qualifiers, XMLDocument.load(ByteArrayInputStream(contents)))
+    override fun save(contents: ByteArray) = store.valuesEncoder.encodeValuesXml(type, qualifiers, XMLDocument.load(ByteArrayInputStream(contents)))
 }

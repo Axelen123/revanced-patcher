@@ -10,7 +10,6 @@ import java.io.Closeable
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
-import java.nio.file.Path
 import javax.xml.parsers.DocumentBuilderFactory
 import javax.xml.transform.TransformerFactory
 import javax.xml.transform.dom.DOMSource
@@ -66,21 +65,11 @@ class ResourceContext internal constructor(private val options: PatcherOptions) 
     val mapper = apkBundle.base.mapper!!
 
     /**
-     * Get a file from the resources from the [Apk].
+     * Open a file from the resources from the [Apk].
      *
      * @param path The path of the resource file.
-     * @return A [File] instance for the resource file or null if not found in any context.
+     * @return A [app.revanced.patcher.apk.File] instance for the resource file or null if not found in any context.
      */
-    fun getFile(
-        path: String,
-        vararg contexts: Apk? = arrayOf(apkBundle.base, apkBundle.split?.asset)
-    ): File? = throw Error("getFile() is unsupported. Use getPath() instead.")
-
-    fun getPath(
-        path: String,
-        vararg contexts: Apk? = arrayOf(apkBundle.base, apkBundle.split?.asset)
-    ): Path = throw Error("dead")
-
     fun openFile(path: String, vararg contexts: Apk? = arrayOf(apkBundle.base, apkBundle.split?.asset)) =
         contexts.firstNotNullOfOrNull { apk -> apk?.openFile(path)?.existsOrNull() }
 

@@ -4,6 +4,7 @@ import app.revanced.patcher.apk.arsc.FileBackend
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.Closeable
+import java.nio.charset.Charset
 
 class File internal constructor(private val path: String, private val apk: Apk, private val backend: FileBackend) :
     Closeable {
@@ -45,6 +46,9 @@ class File internal constructor(private val path: String, private val apk: Apk, 
     }
 
     fun readText() = String(contents)
+    fun writeText(string: String, charset: Charset = Charsets.UTF_8) {
+        contents = string.toByteArray(charset)
+    }
 
     fun inputStream() = ByteArrayInputStream(contents)
     fun outputStream(bufferSize: Int = 256) = object : ByteArrayOutputStream(bufferSize) {
