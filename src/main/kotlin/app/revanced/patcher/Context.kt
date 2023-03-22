@@ -82,7 +82,7 @@ class ResourceContext internal constructor(private val options: PatcherOptions) 
     ): Path = throw Error("dead")
 
     fun openFile(path: String, vararg contexts: Apk? = arrayOf(apkBundle.base, apkBundle.split?.asset)) =
-        contexts.firstNotNullOfOrNull { apk -> apk?.openFile(path)?.takeIf { it.exists } }
+        contexts.firstNotNullOfOrNull { apk -> apk?.openFile(path)?.existsOrNull() }
 
     /**
      * Open an [DomFileEditor] for a given DOM file.
