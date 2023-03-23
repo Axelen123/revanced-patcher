@@ -67,8 +67,8 @@ abstract class PatchBundle(private val patchClassNames: Iterable<String>) {
          *
          * @param optimizedDirectory The directory for [DexClassLoader].
          */
-        fun loadPatches(optimizedDirectory: String) = loadPatches(
-            DexClassLoader(patchBundlePath, optimizedDirectory, null, null)
+        fun loadPatches(optimizedDirectory: String, parent: ClassLoader) = loadPatches(
+            DexClassLoader(patchBundlePath, optimizedDirectory, null, parent)
         )
     }
 }
