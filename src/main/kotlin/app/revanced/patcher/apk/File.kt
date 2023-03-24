@@ -1,8 +1,8 @@
 package app.revanced.patcher.apk
 
 import app.revanced.patcher.apk.arsc.FileBackend
+import app.revanced.patcher.util.SmartByteArrayOutputStream
 import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.nio.charset.Charset
 
@@ -51,10 +51,9 @@ class File internal constructor(private val path: String, private val apk: Apk, 
     }
 
     fun inputStream() = ByteArrayInputStream(contents)
-    fun outputStream(bufferSize: Int = 256) = object : ByteArrayOutputStream(bufferSize) {
+    fun outputStream(bufferSize: Int = 256) = object : SmartByteArrayOutputStream(bufferSize) {
         override fun close() {
-            // If all bytes in the internal buffer are valid, use that to avoid having to copy it.
-            this@File.contents = if (count == buf.size) buf else toByteArray()
+            this@File.contents = data()
             super.close()
         }
     }

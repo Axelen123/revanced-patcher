@@ -9,6 +9,7 @@ import app.revanced.patcher.apk.arsc.EncodeManager
 import app.revanced.patcher.apk.arsc.ValuesBackend
 import app.revanced.patcher.logging.Logger
 import app.revanced.patcher.util.ProxyBackedClassList
+import app.revanced.patcher.util.ensureValid
 import com.reandroid.apk.ApkModule
 import com.reandroid.apk.ApkUtil
 import com.reandroid.archive.APKArchive
@@ -214,10 +215,9 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
                 // Write modified dex files.
                 MultiDexIO.writeDexFile(
                     true, -1, // Core count.
-                    it, Patcher.dexFileNamer, newDexFile, DexIO.DEFAULT_MAX_DEX_POOL_SIZE, null
-                )
+                    it, Patcher.dexFileNamer, newDexFile, DexIO.DEFAULT_MAX_DEX_POOL_SIZE, null)
             }.forEach { (name, store) ->
-                archive.add(ByteInputSource(store.data, name))
+                archive.add(ByteInputSource(ensureValid(store.buffer, store.size), name))
             }
         }
     }
