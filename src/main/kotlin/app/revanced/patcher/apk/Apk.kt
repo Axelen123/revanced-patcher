@@ -5,16 +5,28 @@ package app.revanced.patcher.apk
 import app.revanced.patcher.Patcher
 import app.revanced.patcher.apk.arsc.*
 import app.revanced.patcher.apk.arsc.ArchiveBackend
-import app.revanced.patcher.apk.arsc.EncodeManager
 import app.revanced.patcher.apk.arsc.ValuesBackend
 import app.revanced.patcher.logging.Logger
+import app.revanced.patcher.patch.PatchResult
 import app.revanced.patcher.util.ProxyBackedClassList
 import app.revanced.patcher.util.ensureValid
 import com.reandroid.apk.ApkModule
 import com.reandroid.apk.ApkUtil
+import com.reandroid.apk.xmlencoder.EncodeMaterials
+import com.reandroid.apk.xmlencoder.ValuesEncoder
+import com.reandroid.apk.xmlencoder.XMLEncodeSource
 import com.reandroid.archive.APKArchive
 import com.reandroid.archive.ByteInputSource
-import com.reandroid.archive.ZipAlign
+import com.reandroid.arsc.base.Block
+import com.reandroid.arsc.base.BlockArray
+import com.reandroid.arsc.chunk.PackageBlock
+import com.reandroid.arsc.chunk.TableBlock
+import com.reandroid.arsc.chunk.TypeBlock
+import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
+import com.reandroid.arsc.util.FrameworkTable
+import com.reandroid.arsc.value.ResConfig
+import com.reandroid.arsc.value.ResTableEntry
+import com.reandroid.common.TableEntryStore
 import lanchon.multidexlib2.BasicDexEntry
 import lanchon.multidexlib2.DexIO
 import lanchon.multidexlib2.MultiDexContainerBackedDexFile
@@ -52,19 +64,18 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
         module.setAPKLogger(logger)
     }
 
-    override fun toString(): String = module.moduleName
-
+    override fun toString(): String = module.moduleName // TODO: revert this
 
     /**
      * A [ResourceMapper].
      */
+    @Deprecated("will be removed.")
     internal val mapper = module.tableBlock?.pickOne()?.let { ResourceMapper(it) }
 
     /**
      * Encoding manager
      */
-
-    internal val encodeManager = EncodeManager(module, logger, mapper)
+    // internal val encodeManager = EncodeManager(module, logger, mapper)
 
     /**
      * The metadata of the [Apk].
@@ -95,7 +106,16 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
      */
     internal fun finalize() {
         openFiles.forEach { logger.warn("File $it was never closed! File modifications will not be applied if you do not close them.") }
-        encodeManager.finalize()
+        resources.finalize()
+
+        // Update manifest and package block name.
+        val updatedManifest =
+            module.apkArchive.getInputSource(MANIFEST_NAME).openStream().use { AndroidManifestBlock.load(it) }
+        module.setManifest(updatedManifest)
+        module.androidManifestBlock.refresh()
+        if (module.hasTableBlock()) {
+            resources.packageBlock.name = updatedManifest.packageName
+        }
     }
 
     /**
@@ -111,12 +131,12 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
                     ValuesBackend(
                         qualifiers,
                         type,
-                        encodeManager
+                        resources ?: throw ApkException.Encode("Cannot edit values without a resource table.")
                     )
                 }
 
-                path.endsWith(".xml") -> ArchiveBackend.XML(path, index, encodeManager)
-                else -> ArchiveBackend.Raw(path, index, encodeManager)
+                path.endsWith(".xml") -> ArchiveBackend.XML(path, index, resources, module)
+                else -> ArchiveBackend.Raw(path, index, module.apkArchive, resources)
             }
         )
     }
@@ -126,7 +146,6 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
      */
     fun save(out: File) {
         module.writeApk(out)
-        ZipAlign.align4(out)
     }
 
     /**
@@ -172,6 +191,44 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
         internal val bytecodeData = BytecodeData()
     }
 
+    internal inner class Resources(private val tableBlock: TableBlock) {
+        val packageBlock: PackageBlock = tableBlock.pickOne()
+        val entryStore = TableEntryStore().apply {
+            if (tableBlock !is FrameworkTable) {
+                tableBlock.frameWorks.forEach { add(it) }
+            }
+            add(tableBlock)
+        }
+
+        val encodeMaterials: EncodeMaterials = EncodeMaterials.create(tableBlock).apply { setAPKLogger(logger) }
+
+        val valuesEncoder = ValuesEncoder(encodeMaterials)
+
+        /**
+         * A map of resource files from their actual name to their archive name.
+         * Example: res/drawable-hdpi/icon.png -> res/4a.png
+         */
+        val resFileTable = module.listResFiles().associate { "res/${it.buildPath()}" to it.filePath }
+
+        fun finalize() {
+            // Scan for @+id registrations.
+            module.apkArchive.listInputSources().forEach {
+                if (it is XMLEncodeSource) {
+                    it.xmlSource.xmlDocument.scanIdRegistrations().forEach { attr ->
+                        val name = attr.value.split('/').last()
+                        logger.trace("Registering ID: $name")
+                        packageBlock.getOrCreate("", "id", name).also { entry ->
+                            (entry.tableEntry as ResTableEntry).value.valueAsBoolean = false
+                        }
+                        attr.value = "@id/$name"
+                    }
+                }
+            }
+        }
+    }
+
+    internal val resources = Resources(module.tableBlock ?: frameworkTable)
+
     internal inner class BytecodeData {
         private val dexFile = MultiDexContainerBackedDexFile(object : MultiDexContainer<DexBackedDexFile> {
             /**
@@ -215,7 +272,8 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
                 // Write modified dex files.
                 MultiDexIO.writeDexFile(
                     true, -1, // Core count.
-                    it, Patcher.dexFileNamer, newDexFile, DexIO.DEFAULT_MAX_DEX_POOL_SIZE, null)
+                    it, Patcher.dexFileNamer, newDexFile, DexIO.DEFAULT_MAX_DEX_POOL_SIZE, null
+                )
             }.forEach { (name, store) ->
                 archive.add(ByteInputSource(ensureValid(store.buffer, store.size), name))
             }

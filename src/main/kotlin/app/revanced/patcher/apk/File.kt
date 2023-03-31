@@ -4,6 +4,8 @@ import app.revanced.patcher.apk.arsc.FileBackend
 import app.revanced.patcher.util.SmartByteArrayOutputStream
 import java.io.ByteArrayInputStream
 import java.io.Closeable
+import java.io.InputStream
+import java.io.OutputStream
 import java.nio.charset.Charset
 
 class File internal constructor(private val path: String, private val apk: Apk, private val backend: FileBackend) :
@@ -50,8 +52,8 @@ class File internal constructor(private val path: String, private val apk: Apk, 
         contents = string.toByteArray(charset)
     }
 
-    fun inputStream() = ByteArrayInputStream(contents)
-    fun outputStream(bufferSize: Int = 256) = object : SmartByteArrayOutputStream(bufferSize) {
+    fun inputStream(): InputStream = ByteArrayInputStream(contents)
+    fun outputStream(bufferSize: Int = 256): OutputStream = object : SmartByteArrayOutputStream(bufferSize) {
         override fun close() {
             this@File.contents = data()
             super.close()

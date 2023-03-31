@@ -1,14 +1,19 @@
 package app.revanced.patcher.apk.arsc
 
 import app.revanced.patcher.apk.Apk
+import com.reandroid.apk.ApkModule
 import com.reandroid.apk.XmlHelper
 import com.reandroid.apk.xmldecoder.XMLBagDecoder
+import com.reandroid.apk.xmlencoder.EncodeMaterials
 import com.reandroid.apk.xmlencoder.XMLEncodeSource
 import com.reandroid.archive.APKArchive
 import com.reandroid.archive.ByteInputSource
 import com.reandroid.archive.InputSource
 import com.reandroid.arsc.chunk.TypeBlock
+import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
 import com.reandroid.arsc.value.*
+import com.reandroid.common.EntryStore
+import com.reandroid.common.TableEntryStore
 import com.reandroid.xml.XMLAttribute
 import com.reandroid.xml.XMLDocument
 import com.reandroid.xml.XMLElement
@@ -30,10 +35,10 @@ internal sealed interface FileBackend {
 internal sealed class ArchiveBackend(
     private val path: String,
     private val key: Pair<String, String>?,
-    protected val store: EncodeManager
+    protected val resources: Apk.Resources?,
+    private val archive: APKArchive,
 ) : FileBackend {
-    private val archive: APKArchive = store.module.apkArchive
-    protected val archivePath = store.resFileTable[path] ?: path
+    protected val archivePath = resources?.resFileTable?.get(path) ?: path
     protected val source: InputSource? = archive.getInputSource(archivePath)
 
     override fun exists() = source != null
@@ -44,25 +49,27 @@ internal sealed class ArchiveBackend(
         if (key != null) {
             val (qualifiers, type) = key
             val name = Path(path).nameWithoutExtension
-            store.logger.error("Updating: $qualifiers , $type : $name")
 
-            store.packageBlock!!.getOrCreate(
+            resources!!.packageBlock.getOrCreate(
                 qualifiers,
                 type,
                 name
             ).also {
                 (it.tableEntry as ResTableEntry).value.valueAsString = archivePath
             }
+            /*
             if (store.module.listResFiles().find { it.filePath == archivePath } == null) {
                 throw Apk.ApkException.Encode("Failed to register resource: $archivePath")
             }
+             */
         }
     }
 
     /**
      * Loads/saves the raw contents of the file in the archive.
      */
-    class Raw(path: String, key: Pair<String, String>?, store: EncodeManager) : ArchiveBackend(path, key, store) {
+    class Raw(path: String, key: Pair<String, String>?, archive: APKArchive, resources: Apk.Resources?) :
+        ArchiveBackend(path, key, resources, archive) {
         override fun load(): ByteArray = ByteArrayOutputStream(source!!.length.toInt()).apply {
             source.openStream().use { it.copyTo(this) }
         }.toByteArray()
@@ -73,28 +80,37 @@ internal sealed class ArchiveBackend(
     /**
      * Transparently decodes and encodes Android binary XML to/from regular XML.
      */
-    class XML(path: String, key: Pair<String, String>?, store: EncodeManager) : ArchiveBackend(path, key, store) {
-        private val isManifest = archivePath == Apk.MANIFEST_NAME
+    class XML(
+        path: String,
+        key: Pair<String, String>?,
+        resources: Apk.Resources?,
+        private val module: ApkModule,
+        private val entryStore: TableEntryStore = resources!!.entryStore,
+        private val encodeMaterials: EncodeMaterials = resources!!.encodeMaterials
+    ) : ArchiveBackend(path, key, resources, module.apkArchive) {
+        // private val isManifest = archivePath == Apk.MANIFEST_NAME
 
         override fun load(): ByteArray = ByteArrayOutputStream(4096).also {
-            when {
+            when (source) {
                 /**
                  * Avoid having to potentially encode and decode the same XML over and over again.
                  * This also means we do not have to deal with encoding references to resources that do not exist yet.
                  */
-                source is XMLEncodeSource -> source.xmlSource.xmlDocument
-                isManifest -> store.module.androidManifestBlock.decodeToXml(
-                    store.entryStore,
-                    store.packageBlock?.id ?: 0
+                is XMLEncodeSource -> source.xmlSource.xmlDocument
+                /*
+                isManifest -> module.androidManifestBlock.decodeToXml(
+                    entryStore,
+                    resources?.packageBlock?.id ?: 0
                 )
-
-                else -> store.module.decodeXMLFile(archivePath)
+                */
+                // else -> resources!!.module.decodeXMLFile(archivePath)
+                else -> module.loadResXmlDocument(archivePath).decodeToXml(entryStore, resources?.packageBlock?.id ?: 0)
             }.save(it, false)
         }.toByteArray()
 
         override fun save(contents: ByteArray) = saveInputSource(
             XMLEncodeSource(
-                store.encodeMaterials,
+                encodeMaterials,
                 XMLDocumentSource(archivePath, XMLDocument.load(ByteArrayInputStream(contents)))
             )
         )
@@ -104,24 +120,21 @@ internal sealed class ArchiveBackend(
 internal class ValuesBackend(
     private val qualifiers: String,
     private val type: String,
-    private val store: EncodeManager,
+    private val resources: Apk.Resources,
 ) : FileBackend {
     private val decodedEntries = HashMap<Int, Set<ResConfig>>()
-    private val xmlBagDecoder = XMLBagDecoder(store.entryStore)
+    private val xmlBagDecoder = XMLBagDecoder(resources.entryStore)
+    private val sequence = resources.packageBlock.typeBlocksFor(qualifiers, type)
 
-    override fun exists() = store.findTypeBlock(qualifiers, type) != null
-
-    private fun getOrCreateTypeBlock(): TypeBlock =
-        store.packageBlock!!.getOrCreateSpecType(type).getOrCreateTypeBlock(qualifiers)
+    override fun exists() = sequence.any()
 
     override fun load(): ByteArray = ByteArrayOutputStream(256).also {
         XMLDocument("resources").apply {
-            getOrCreateTypeBlock().listEntries(true)
-                .forEach { entry ->
-                    if (!containsDecodedEntry(entry)) {
-                        documentElement.addChild(decodeValue(entry))
-                    }
+            sequence.flatMap { it.entryArray.asSequence() }.forEach { entry ->
+                if (!containsDecodedEntry(entry)) {
+                    documentElement.addChild(decodeValue(entry))
                 }
+            }
             save(it, false)
         }
     }.toByteArray()
@@ -146,7 +159,7 @@ internal class ValuesBackend(
                 )
             } else {
                 val value = com.reandroid.arsc.decoder.ValueDecoder.decodeEntryValue(
-                    store.entryStore, entry.packageBlock, resValue.valueType, resValue.data
+                    resources.entryStore, entry.packageBlock, resValue.valueType, resValue.data
                 )
                 element.textContent = value
             }
@@ -157,5 +170,6 @@ internal class ValuesBackend(
         return element
     }
 
-    override fun save(contents: ByteArray) = store.valuesEncoder.encodeValuesXml(type, qualifiers, XMLDocument.load(ByteArrayInputStream(contents)))
+    override fun save(contents: ByteArray) =
+        resources.valuesEncoder.encodeValuesXml(type, qualifiers, XMLDocument.load(ByteArrayInputStream(contents)))
 }
