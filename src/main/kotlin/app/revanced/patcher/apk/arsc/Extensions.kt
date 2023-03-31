@@ -4,6 +4,10 @@ import com.reandroid.arsc.base.Block
 import com.reandroid.arsc.base.BlockArray
 import com.reandroid.arsc.chunk.PackageBlock
 import com.reandroid.arsc.chunk.TypeBlock
+import com.reandroid.arsc.value.Entry
+import com.reandroid.arsc.value.ResTableEntry
+import com.reandroid.arsc.value.ResValue
+import com.reandroid.arsc.value.TableEntry
 import com.reandroid.xml.XMLDocument
 
 
@@ -19,6 +23,9 @@ internal fun PackageBlock.typeBlocksFor(qualifiers: String, type: String) =
     typeBlocksFor(type).filter { it.qualifiers == qualifiers }
 
 internal fun TypeBlock.findEntry(name: String) = entryArray.asSequence().find { it.name == name }
+
+internal fun <T> Entry.value(callback: (ResValue) -> T): T? =
+    if (tableEntry is ResTableEntry) callback(tableEntry.value as ResValue) else null
 
 internal fun XMLDocument.scanIdRegistrations() = sequence {
     val elements = mutableListOf(documentElement)

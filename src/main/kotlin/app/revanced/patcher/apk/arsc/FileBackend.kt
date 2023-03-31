@@ -5,14 +5,12 @@ import com.reandroid.apk.ApkModule
 import com.reandroid.apk.XmlHelper
 import com.reandroid.apk.xmldecoder.XMLBagDecoder
 import com.reandroid.apk.xmlencoder.EncodeMaterials
+import com.reandroid.apk.xmlencoder.EncodeUtil
 import com.reandroid.apk.xmlencoder.XMLEncodeSource
 import com.reandroid.archive.APKArchive
 import com.reandroid.archive.ByteInputSource
 import com.reandroid.archive.InputSource
-import com.reandroid.arsc.chunk.TypeBlock
-import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
 import com.reandroid.arsc.value.*
-import com.reandroid.common.EntryStore
 import com.reandroid.common.TableEntryStore
 import com.reandroid.xml.XMLAttribute
 import com.reandroid.xml.XMLDocument
@@ -20,8 +18,7 @@ import com.reandroid.xml.XMLElement
 import com.reandroid.xml.source.XMLDocumentSource
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
-import kotlin.io.path.Path
-import kotlin.io.path.nameWithoutExtension
+import java.io.File
 
 internal sealed interface FileBackend {
     fun load(): ByteArray
@@ -34,11 +31,40 @@ internal sealed interface FileBackend {
  */
 internal sealed class ArchiveBackend(
     private val path: String,
-    private val key: Pair<String, String>?,
-    protected val resources: Apk.Resources?,
+    protected val resources: Apk.Resources,
     private val archive: APKArchive,
 ) : FileBackend {
-    protected val archivePath = resources?.resFileTable?.get(path) ?: path
+    data class RegistrationData(val qualifiers: String, val type: String, val name: String)
+
+    private var registration: RegistrationData? = null
+
+    /**
+     * Maps the "virtual" name to the "archive" name using the resource table.
+     * This is required because the file name developers use might not correspond to the name in the archive.
+     * Example: res/drawable-hdpi/icon.png -> res/4a.png
+     */
+    protected val archivePath = run {
+        if (!path.startsWith("res") || path.count { it == '/' } != 2) {
+            return@run path
+        }
+        val file = File(path)
+        registration = RegistrationData(
+            EncodeUtil.getQualifiersFromResFile(file),
+            EncodeUtil.getTypeNameFromResFile(file),
+            file.nameWithoutExtension
+        )
+
+        with(registration!!) {
+            resources.packageBlock.typeBlocksFor(
+                qualifiers,
+                type
+            ).firstNotNullOfOrNull {
+                it.findEntry(name)?.value { res ->
+                    res.valueAsString
+                }
+            } ?: path
+        }
+    }
     protected val source: InputSource? = archive.getInputSource(archivePath)
 
     override fun exists() = source != null
@@ -46,30 +72,22 @@ internal sealed class ArchiveBackend(
     protected fun saveInputSource(src: InputSource) {
         archive.add(src)
         // Register the file in the resource table if needed.
-        if (key != null) {
-            val (qualifiers, type) = key
-            val name = Path(path).nameWithoutExtension
-
-            resources!!.packageBlock.getOrCreate(
-                qualifiers,
-                type,
-                name
-            ).also {
-                (it.tableEntry as ResTableEntry).value.valueAsString = archivePath
+        registration?.let {
+            resources.packageBlock.getOrCreate(
+                it.qualifiers,
+                it.type,
+                it.name
+            ).value { res ->
+                res.valueAsString = archivePath
             }
-            /*
-            if (store.module.listResFiles().find { it.filePath == archivePath } == null) {
-                throw Apk.ApkException.Encode("Failed to register resource: $archivePath")
-            }
-             */
         }
     }
 
     /**
      * Loads/saves the raw contents of the file in the archive.
      */
-    class Raw(path: String, key: Pair<String, String>?, archive: APKArchive, resources: Apk.Resources?) :
-        ArchiveBackend(path, key, resources, archive) {
+    class Raw(path: String, resources: Apk.Resources, archive: APKArchive) :
+        ArchiveBackend(path, resources, archive) {
         override fun load(): ByteArray = ByteArrayOutputStream(source!!.length.toInt()).apply {
             source.openStream().use { it.copyTo(this) }
         }.toByteArray()
@@ -82,14 +100,9 @@ internal sealed class ArchiveBackend(
      */
     class XML(
         path: String,
-        key: Pair<String, String>?,
-        resources: Apk.Resources?,
+        resources: Apk.Resources,
         private val module: ApkModule,
-        private val entryStore: TableEntryStore = resources!!.entryStore,
-        private val encodeMaterials: EncodeMaterials = resources!!.encodeMaterials
-    ) : ArchiveBackend(path, key, resources, module.apkArchive) {
-        // private val isManifest = archivePath == Apk.MANIFEST_NAME
-
+    ) : ArchiveBackend(path, resources, module.apkArchive) {
         override fun load(): ByteArray = ByteArrayOutputStream(4096).also {
             when (source) {
                 /**
@@ -97,31 +110,23 @@ internal sealed class ArchiveBackend(
                  * This also means we do not have to deal with encoding references to resources that do not exist yet.
                  */
                 is XMLEncodeSource -> source.xmlSource.xmlDocument
-                /*
-                isManifest -> module.androidManifestBlock.decodeToXml(
-                    entryStore,
-                    resources?.packageBlock?.id ?: 0
-                )
-                */
-                // else -> resources!!.module.decodeXMLFile(archivePath)
-                else -> module.loadResXmlDocument(archivePath).decodeToXml(entryStore, resources?.packageBlock?.id ?: 0)
+                else -> module.loadResXmlDocument(archivePath)
+                    .decodeToXml(resources.entryStore, resources?.packageBlock?.id ?: 0)
             }.save(it, false)
         }.toByteArray()
 
         override fun save(contents: ByteArray) = saveInputSource(
             XMLEncodeSource(
-                encodeMaterials,
+                resources.encodeMaterials,
                 XMLDocumentSource(archivePath, XMLDocument.load(ByteArrayInputStream(contents)))
             )
         )
     }
 }
 
-internal class ValuesBackend(
-    private val qualifiers: String,
-    private val type: String,
-    private val resources: Apk.Resources,
-) : FileBackend {
+internal class ValuesBackend(file: File, private val resources: Apk.Resources) : FileBackend {
+    private val qualifiers = EncodeUtil.getQualifiersFromValuesXml(file)
+    private val type = EncodeUtil.getTypeNameFromValuesXml(file)
     private val decodedEntries = HashMap<Int, Set<ResConfig>>()
     private val xmlBagDecoder = XMLBagDecoder(resources.entryStore)
     private val sequence = resources.packageBlock.typeBlocksFor(qualifiers, type)

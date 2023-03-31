@@ -179,7 +179,7 @@ class Patcher(private val options: PatcherOptions) {
 
         options.apkBundle.base.apply {
             logger.info("Writing patched dex files")
-            bytecodeData.writeDexFiles(module.apkArchive)
+            bytecodeData.writeDexFiles()
         }
 
         return PatcherResult(patchResults)

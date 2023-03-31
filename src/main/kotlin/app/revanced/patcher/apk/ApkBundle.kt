@@ -23,30 +23,6 @@ class ApkBundle(
         internal set
 
     /**
-     * TODO: make this return [Apk]
-     * Merge all [Apk.Split] files to [Apk.Base].
-     * This will set [split] to null.
-     * @param options The [PatcherOptions] to write the resources with.
-     */
-    private fun merge() = ApkBundle().apply {
-        setAPKLogger(logger)
-        addModule(base.module)
-        split?.all?.forEach { addModule(it.module) }
-    }.mergeModules().also {
-        // Sanitize the manifest.
-        if (it.hasAndroidManifestBlock()) {
-            val manifest = it.androidManifestBlock
-            val appElement = manifest.applicationElement.startElement
-            arrayOf(
-                AndroidManifestBlock.ID_isSplitRequired,
-                AndroidManifestBlock.ID_extractNativeLibs
-            ).forEach { id -> appElement.resXmlAttributeArray.remove(appElement.getAttribute(id)) }
-            // TODO: maybe delet signature and vending stuff idk
-            manifest.refresh()
-        }
-    }
-
-    /**
      * Refresh some additional resources in the [ApkBundle] that have been patched.
      *
      * @return A sequence of the [Apk] files which are being refreshed.
