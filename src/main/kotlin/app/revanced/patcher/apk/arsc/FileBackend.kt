@@ -18,13 +18,11 @@ import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.OutputStream
 
-const val DEFAULT_BUFFER_SIZE = 8 * 1024
-
 internal sealed interface FileBackend {
     fun load(outputStream: OutputStream)
     fun save(contents: ByteArray)
     fun exists(): Boolean
-    fun suggestedSize() = DEFAULT_BUFFER_SIZE
+    fun suggestedSize() = 8 * 1024
 }
 
 /**
@@ -93,12 +91,11 @@ internal sealed class ArchiveBackend(
     class Raw(path: String, resources: Apk.Resources, archive: APKArchive) :
         ArchiveBackend(path, resources, archive) {
         override fun load(outputStream: OutputStream) {
-            source!!.openStream().use { it.copyTo(outputStream, DEFAULT_BUFFER_SIZE) }
+            source!!.write(outputStream)
         }
 
         override fun save(contents: ByteArray) = saveInputSource(ByteInputSource(contents, archivePath))
-        override fun suggestedSize() = source?.length?.toInt() ?: DEFAULT_BUFFER_SIZE
-
+        override fun suggestedSize() = source?.length?.toInt() ?: super.suggestedSize()
     }
 
     /**
