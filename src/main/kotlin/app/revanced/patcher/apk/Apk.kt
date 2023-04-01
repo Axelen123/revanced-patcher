@@ -192,12 +192,12 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
         internal val bytecodeData = BytecodeData()
     }
 
-    internal inner class Resources(private val tableBlock: TableBlock) {
-        val hasResourceTable = tableBlock !is FrameworkTable
+    internal inner class Resources(val tableBlock: TableBlock) {
+        val hasResourceTable = module.hasTableBlock()
 
         val packageBlock: PackageBlock = tableBlock.pickOne()
         val entryStore = TableEntryStore().apply {
-            if (tableBlock !is FrameworkTable) {
+            if (hasResourceTable) {
                 tableBlock.frameWorks.forEach { add(it) }
             }
             add(tableBlock)

@@ -31,42 +31,44 @@ internal sealed interface FileBackend {
  * Represents a file in the [APKArchive].
  */
 internal sealed class ArchiveBackend(
-    private val path: String,
+    path: String,
     protected val resources: Apk.Resources,
     private val archive: APKArchive,
 ) : FileBackend {
     data class RegistrationData(val qualifiers: String, val type: String, val name: String)
 
-    private var registration: RegistrationData? = null
+    private val registration: RegistrationData?
 
     /**
      * Maps the "virtual" name to the "archive" name using the resource table.
      * This is required because the file name developers use might not correspond to the name in the archive.
      * Example: res/drawable-hdpi/icon.png -> res/4a.png
      */
-    protected val archivePath = run {
-        if (!resources.hasResourceTable || !path.startsWith("res") || path.count { it == '/' } != 2) {
-            return@run path
-        }
+    protected val archivePath =
+        if (resources.hasResourceTable && path.startsWith("res/") && path.count { it == '/' } == 2) {
+            registration = File(path).let {
+                RegistrationData(
+                    EncodeUtil.getQualifiersFromResFile(it),
+                    EncodeUtil.getTypeNameFromResFile(it),
+                    it.nameWithoutExtension
+                )
+            }
 
-        val file = File(path)
-        registration = RegistrationData(
-            EncodeUtil.getQualifiersFromResFile(file),
-            EncodeUtil.getTypeNameFromResFile(file),
-            file.nameWithoutExtension
-        )
-
-        with(registration!!) {
-            resources.packageBlock.typeBlocksFor(
-                qualifiers,
-                type
-            ).firstNotNullOfOrNull {
-                it.findEntry(name)?.value { res ->
-                    res.valueAsString
+            with(registration) {
+                resources.packageBlock.typeBlocksFor(
+                    qualifiers,
+                    type
+                ).firstNotNullOfOrNull {
+                    it.findEntry(name)?.value { res ->
+                        res.valueAsString
+                    }
                 }
             } ?: path
+        } else {
+            registration = null
+            path
         }
-    }
+
     protected val source: InputSource? = archive.getInputSource(archivePath)
 
     override fun exists() = source != null
