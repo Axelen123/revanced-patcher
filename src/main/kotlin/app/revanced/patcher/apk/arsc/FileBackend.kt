@@ -4,26 +4,27 @@ import app.revanced.patcher.apk.Apk
 import com.reandroid.apk.ApkModule
 import com.reandroid.apk.XmlHelper
 import com.reandroid.apk.xmldecoder.XMLBagDecoder
-import com.reandroid.apk.xmlencoder.EncodeMaterials
 import com.reandroid.apk.xmlencoder.EncodeUtil
 import com.reandroid.apk.xmlencoder.XMLEncodeSource
 import com.reandroid.archive.APKArchive
 import com.reandroid.archive.ByteInputSource
 import com.reandroid.archive.InputSource
 import com.reandroid.arsc.value.*
-import com.reandroid.common.TableEntryStore
 import com.reandroid.xml.XMLAttribute
 import com.reandroid.xml.XMLDocument
 import com.reandroid.xml.XMLElement
 import com.reandroid.xml.source.XMLDocumentSource
 import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.OutputStream
+
+const val DEFAULT_BUFFER_SIZE = 8 * 1024
 
 internal sealed interface FileBackend {
-    fun load(): ByteArray
+    fun load(outputStream: OutputStream)
     fun save(contents: ByteArray)
     fun exists(): Boolean
+    fun suggestedSize() = DEFAULT_BUFFER_SIZE
 }
 
 /**
@@ -44,9 +45,10 @@ internal sealed class ArchiveBackend(
      * Example: res/drawable-hdpi/icon.png -> res/4a.png
      */
     protected val archivePath = run {
-        if (!path.startsWith("res") || path.count { it == '/' } != 2) {
+        if (!resources.hasResourceTable || !path.startsWith("res") || path.count { it == '/' } != 2) {
             return@run path
         }
+
         val file = File(path)
         registration = RegistrationData(
             EncodeUtil.getQualifiersFromResFile(file),
@@ -88,11 +90,13 @@ internal sealed class ArchiveBackend(
      */
     class Raw(path: String, resources: Apk.Resources, archive: APKArchive) :
         ArchiveBackend(path, resources, archive) {
-        override fun load(): ByteArray = ByteArrayOutputStream(source!!.length.toInt()).apply {
-            source.openStream().use { it.copyTo(this) }
-        }.toByteArray()
+        override fun load(outputStream: OutputStream) {
+            source!!.openStream().use { it.copyTo(outputStream, DEFAULT_BUFFER_SIZE) }
+        }
 
         override fun save(contents: ByteArray) = saveInputSource(ByteInputSource(contents, archivePath))
+        override fun suggestedSize() = source?.length?.toInt() ?: DEFAULT_BUFFER_SIZE
+
     }
 
     /**
@@ -103,7 +107,7 @@ internal sealed class ArchiveBackend(
         resources: Apk.Resources,
         private val module: ApkModule,
     ) : ArchiveBackend(path, resources, module.apkArchive) {
-        override fun load(): ByteArray = ByteArrayOutputStream(4096).also {
+        override fun load(outputStream: OutputStream) {
             when (source) {
                 /**
                  * Avoid having to potentially encode and decode the same XML over and over again.
@@ -111,9 +115,9 @@ internal sealed class ArchiveBackend(
                  */
                 is XMLEncodeSource -> source.xmlSource.xmlDocument
                 else -> module.loadResXmlDocument(archivePath)
-                    .decodeToXml(resources.entryStore, resources?.packageBlock?.id ?: 0)
-            }.save(it, false)
-        }.toByteArray()
+                    .decodeToXml(resources.entryStore, if (resources.hasResourceTable) resources.packageBlock.id else 0)
+            }.save(outputStream, false)
+        }
 
         override fun save(contents: ByteArray) = saveInputSource(
             XMLEncodeSource(
@@ -125,24 +129,29 @@ internal sealed class ArchiveBackend(
 }
 
 internal class ValuesBackend(file: File, private val resources: Apk.Resources) : FileBackend {
+    init {
+        if (file.name == "public.xml") throw Apk.ApkException.Decode("Opening the resource id table is not supported.")
+    }
+
     private val qualifiers = EncodeUtil.getQualifiersFromValuesXml(file)
     private val type = EncodeUtil.getTypeNameFromValuesXml(file)
     private val decodedEntries = HashMap<Int, Set<ResConfig>>()
     private val xmlBagDecoder = XMLBagDecoder(resources.entryStore)
-    private val sequence = resources.packageBlock.typeBlocksFor(qualifiers, type)
+    private val typeBlocks = resources.packageBlock.typeBlocksFor(qualifiers, type)
 
-    override fun exists() = sequence.any()
+    override fun exists() = typeBlocks.any()
 
-    override fun load(): ByteArray = ByteArrayOutputStream(256).also {
+    override fun load(outputStream: OutputStream) {
         XMLDocument("resources").apply {
-            sequence.flatMap { it.entryArray.asSequence() }.forEach { entry ->
+            typeBlocks.flatMap { it.entryArray.asSequence() }.forEach { entry ->
                 if (!containsDecodedEntry(entry)) {
                     documentElement.addChild(decodeValue(entry))
                 }
             }
-            save(it, false)
+
+            save(outputStream, false)
         }
-    }.toByteArray()
+    }
 
     private fun containsDecodedEntry(entry: Entry): Boolean {
         val resConfigSet = decodedEntries[entry.resourceId] ?: return false

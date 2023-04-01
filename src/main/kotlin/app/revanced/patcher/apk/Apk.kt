@@ -11,6 +11,7 @@ import app.revanced.patcher.util.ProxyBackedClassList
 import com.reandroid.apk.AndroidFrameworks
 import com.reandroid.apk.ApkModule
 import com.reandroid.apk.ApkUtil
+import com.reandroid.apk.xmlencoder.EncodeException
 import com.reandroid.apk.xmlencoder.EncodeMaterials
 import com.reandroid.apk.xmlencoder.ValuesEncoder
 import com.reandroid.apk.xmlencoder.XMLEncodeSource
@@ -37,7 +38,6 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
     lateinit var path: String
 
     companion object {
-        const val MANIFEST_NAME = "AndroidManifest.xml"
         val frameworkTable: FrameworkTable = AndroidFrameworks.getLatest().tableBlock
     }
 
@@ -96,15 +96,35 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
      */
     internal fun finalize() {
         openFiles.forEach { logger.warn("File $it was never closed! File modifications will not be applied if you do not close them.") }
-        resources.finalize()
 
-        // Update manifest and package block name.
-        val updatedManifest =
-            module.apkArchive.getInputSource(MANIFEST_NAME).openStream().use { AndroidManifestBlock.load(it) }
-        module.setManifest(updatedManifest)
-        module.androidManifestBlock.refresh()
-        if (module.hasTableBlock()) {
-            resources.packageBlock.name = updatedManifest.packageName
+        module.apkArchive.listInputSources().forEach {
+            if (it is XMLEncodeSource) {
+                if (resources.hasResourceTable) {
+                    // Scan for @+id registrations.
+                    it.xmlSource.xmlDocument.scanIdRegistrations().forEach { attr ->
+                        val name = attr.value.split('/').last()
+                        logger.trace("Registering ID: $name")
+                        resources.packageBlock.getOrCreate("", "id", name).value { res ->
+                            res.valueAsBoolean = false
+                        }
+                        attr.value = "@id/$name"
+                    }
+                }
+
+                try {
+                    it.resXmlBlock // Force the XMLEncodeSource to encode.
+                } catch (e: EncodeException) {
+                    throw ApkException.Encode("Failed to encode ${it.name}", e)
+                }
+            }
+
+            if (it.name == AndroidManifestBlock.FILE_NAME) {
+                // Update package block name
+                val manifest = it.openStream().use { stream -> AndroidManifestBlock.load(stream) }
+                if (resources.hasResourceTable) {
+                    resources.packageBlock.name = manifest.packageName
+                }
+            }
         }
     }
 
@@ -113,12 +133,10 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
      */
     fun openFile(path: String) = File(
         path, this, when {
-            path == "res/values/public.xml" -> throw ApkException.Encode("Editing the resource table is not supported.")
-            path.startsWith("res/values") -> ValuesBackend(
+            resources.hasResourceTable && path.startsWith("res/values") -> ValuesBackend(
                 File(path),
                 resources
             )
-
             path.endsWith(".xml") -> ArchiveBackend.XML(path, resources, module)
             else -> ArchiveBackend.Raw(path, resources, module.apkArchive)
         }
@@ -175,6 +193,8 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
     }
 
     internal inner class Resources(private val tableBlock: TableBlock) {
+        val hasResourceTable = tableBlock !is FrameworkTable
+
         val packageBlock: PackageBlock = tableBlock.pickOne()
         val entryStore = TableEntryStore().apply {
             if (tableBlock !is FrameworkTable) {
@@ -182,26 +202,8 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
             }
             add(tableBlock)
         }
-
         val encodeMaterials: EncodeMaterials = EncodeMaterials.create(tableBlock).apply { setAPKLogger(logger) }
-
         val valuesEncoder = ValuesEncoder(encodeMaterials)
-
-        fun finalize() {
-            // Scan for @+id registrations.
-            module.apkArchive.listInputSources().forEach {
-                if (it is XMLEncodeSource) {
-                    it.xmlSource.xmlDocument.scanIdRegistrations().forEach { attr ->
-                        val name = attr.value.split('/').last()
-                        logger.trace("Registering ID: $name")
-                        packageBlock.getOrCreate("", "id", name).value { res ->
-                            res.valueAsBoolean = false
-                        }
-                        attr.value = "@id/$name"
-                    }
-                }
-            }
-        }
     }
 
     internal val resources = Resources(module.tableBlock ?: frameworkTable)

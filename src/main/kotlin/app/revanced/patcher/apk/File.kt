@@ -6,7 +6,6 @@ import java.io.ByteArrayInputStream
 import java.io.Closeable
 import java.io.InputStream
 import java.io.OutputStream
-import java.nio.charset.Charset
 
 class File internal constructor(private val path: String, private val apk: Apk, private val backend: FileBackend) :
     Closeable {
@@ -34,7 +33,7 @@ class File internal constructor(private val path: String, private val apk: Apk, 
         apk.lockFile(path)
         if (exists) {
             apk.logger.info("Reading file: $path")
-            contents = backend.load()
+            outputStream().use { backend.load(it) }
             changed = false
         }
     }
@@ -48,15 +47,16 @@ class File internal constructor(private val path: String, private val apk: Apk, 
     }
 
     fun readText() = String(contents)
-    fun writeText(string: String, charset: Charset = Charsets.UTF_8) {
-        contents = string.toByteArray(charset)
+    fun writeText(string: String) {
+        contents = string.toByteArray()
     }
 
     fun inputStream(): InputStream = ByteArrayInputStream(contents)
-    fun outputStream(bufferSize: Int = 256): OutputStream = object : SmartByteArrayOutputStream(bufferSize) {
-        override fun close() {
-            this@File.contents = data()
-            super.close()
+    fun outputStream(bufferSize: Int = backend.suggestedSize()): OutputStream =
+        object : SmartByteArrayOutputStream(bufferSize) {
+            override fun close() {
+                this@File.contents = data()
+                super.close()
+            }
         }
-    }
 }
