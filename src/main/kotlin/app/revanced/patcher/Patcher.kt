@@ -161,7 +161,7 @@ class Patcher(private val options: PatcherOptions) {
     fun save(): PatcherResult {
         val patchResults = buildList {
             logger.info("Writing patched resources")
-            options.apkBundle.finalize().forEach { writeResult ->
+            options.apkBundle.finalize(options).forEach { writeResult ->
                 if (writeResult.exception is Apk.ApkException.Encode) return@forEach
 
                 val patch = writeResult.apk.let {

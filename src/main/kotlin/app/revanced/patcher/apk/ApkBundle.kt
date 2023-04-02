@@ -1,5 +1,6 @@
 package app.revanced.patcher.apk
 
+import app.revanced.patcher.Patcher
 import app.revanced.patcher.PatcherOptions
 import app.revanced.patcher.logging.Logger
 import com.reandroid.apk.ApkBundle
@@ -14,7 +15,6 @@ import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
 class ApkBundle(
     val base: Apk.Base,
     split: Split? = null,
-    val logger: Logger
 ) {
     /**
      * The [Apk.Split] files.
@@ -25,18 +25,19 @@ class ApkBundle(
     /**
      * Refresh some additional resources in the [ApkBundle] that have been patched.
      *
+     * @param options The [PatcherOptions] of the [Patcher].
      * @return A sequence of the [Apk] files which are being refreshed.
      */
-    internal fun finalize() = sequence {
+    internal fun finalize(options: PatcherOptions) = sequence {
         with(base) {
-            finalize()
+            finalize(options)
 
             yield(SplitApkResult.Write(this))
         }
 
         split?.all?.forEach { splitApk ->
             with(splitApk) {
-                finalize()
+                finalize(options)
 
                 yield(SplitApkResult.Write(this))
             }

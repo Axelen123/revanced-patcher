@@ -3,14 +3,13 @@
 package app.revanced.patcher.apk
 
 import app.revanced.patcher.Patcher
+import app.revanced.patcher.PatcherOptions
 import app.revanced.patcher.apk.arsc.*
 import app.revanced.patcher.apk.arsc.ArchiveBackend
 import app.revanced.patcher.apk.arsc.ValuesBackend
-import app.revanced.patcher.logging.Logger
 import app.revanced.patcher.util.ProxyBackedClassList
 import com.reandroid.apk.AndroidFrameworks
 import com.reandroid.apk.ApkModule
-import com.reandroid.apk.ApkUtil
 import com.reandroid.apk.xmlencoder.EncodeException
 import com.reandroid.apk.xmlencoder.EncodeMaterials
 import com.reandroid.apk.xmlencoder.ValuesEncoder
@@ -34,32 +33,22 @@ import java.io.File
 import java.util.zip.ZipEntry
 
 
-sealed class Apk private constructor(internal val module: ApkModule, internal val logger: Logger) {
-    lateinit var path: String
 
+/**
+ * The [Apk] file that is to be patched.
+ *
+ * @param path The path to the apk file.
+ * @param name The name of this apk.
+ */
+sealed class Apk private constructor(val path: File, name: String) {
     companion object {
         val frameworkTable: FrameworkTable = AndroidFrameworks.getLatest().tableBlock
     }
 
-    /**
-     * The apk file that is to be patched.
-     *
-     * @param filePath The path to the apk file.
-     */
-    constructor(filePath: String, logger: Logger) : this(
-        ApkModule.loadApkFile(
-            File(filePath),
-            ApkUtil.toModuleName(File(filePath))
-        ), logger
-    ) {
-        path = filePath
-    }
+    internal val module = ApkModule.loadApkFile(path, name)
 
-    init {
-        module.setAPKLogger(logger)
-    }
 
-    override fun toString(): String = module.moduleName // TODO: revert this
+    override fun toString(): String = module.moduleName
 
     /**
      * A [ResourceMapper].
@@ -93,9 +82,11 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
 
     /**
      * Refresh updated resources for an [Apk].
+     *
+     * @param options The [PatcherOptions] of the [Patcher].
      */
-    internal fun finalize() {
-        openFiles.forEach { logger.warn("File $it was never closed! File modifications will not be applied if you do not close them.") }
+    internal fun finalize(options: PatcherOptions) {
+        openFiles.forEach { options.logger.warn("File $it was never closed! File modifications will not be applied if you do not close them.") }
 
         module.apkArchive.listInputSources().forEach {
             if (it is XMLEncodeSource) {
@@ -103,7 +94,7 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
                     // Scan for @+id registrations.
                     it.xmlSource.xmlDocument.scanIdRegistrations().forEach { attr ->
                         val name = attr.value.split('/').last()
-                        logger.trace("Registering ID: $name")
+                        options.logger.trace("Registering ID: $name")
                         resources.packageBlock.getOrCreate("", "id", name).value { res ->
                             res.valueAsBoolean = false
                         }
@@ -137,6 +128,7 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
                 File(path),
                 resources
             )
+
             path.endsWith(".xml") -> ArchiveBackend.XML(path, resources, module)
             else -> ArchiveBackend.Raw(path, resources, module.apkArchive)
         }
@@ -152,40 +144,40 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
     /**
      * The split apk file that is to be patched.
      *
-     * @param filePath The path to the apk file.
+     * @param path The path to the apk file.
      * @see Apk
      */
-    sealed class Split(filePath: String, logger: Logger) : Apk(filePath, logger) {
+    sealed class Split(path: File, name: String) : Apk(path, name) {
 
         /**
          * The split apk file which contains language files.
          *
-         * @param filePath The path to the apk file.
+         * @param path The path to the apk file.
          */
-        class Language(filePath: String, logger: Logger) : Split(filePath, logger)
+        class Language(path: File) : Split(path, "language")
 
         /**
          * The split apk file which contains libraries.
          *
-         * @param filePath The path to the apk file.
+         * @param path The path to the apk file.
          */
-        class Library(filePath: String, logger: Logger) : Split(filePath, logger)
+        class Library(path: File) : Split(path, "library")
 
         /**
          * The split apk file which contains assets.
          *
-         * @param filePath The path to the apk file.
+         * @param path The path to the apk file.
          */
-        class Asset(filePath: String, logger: Logger) : Split(filePath, logger)
+        class Asset(path: File) : Split(path, "asset")
     }
 
     /**
      * The base apk file that is to be patched.
      *
-     * @param filePath The path to the apk file.
+     * @param path The path to the apk file.
      * @see Apk
      */
-    class Base(filePath: String, logger: Logger) : Apk(filePath, logger) {
+    class Base(path: File) : Apk(path, "base") {
         /**
          * Data of the [Base] apk file.
          */
@@ -202,7 +194,7 @@ sealed class Apk private constructor(internal val module: ApkModule, internal va
             }
             add(tableBlock)
         }
-        val encodeMaterials: EncodeMaterials = EncodeMaterials.create(tableBlock).apply { setAPKLogger(logger) }
+        val encodeMaterials: EncodeMaterials = EncodeMaterials.create(tableBlock)
         val valuesEncoder = ValuesEncoder(encodeMaterials)
     }
 

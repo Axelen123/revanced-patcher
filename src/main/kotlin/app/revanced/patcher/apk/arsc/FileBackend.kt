@@ -117,7 +117,6 @@ internal sealed class ArchiveBackend(
                     .decodeToXml(resources.entryStore, if (resources.hasResourceTable) resources.packageBlock.id else 0)
             }.save(outputStream, false)
         }
-
         override fun save(contents: ByteArray) = saveInputSource(
             XMLEncodeSource(
                 resources.encodeMaterials,

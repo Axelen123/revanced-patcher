@@ -32,7 +32,6 @@ class File internal constructor(private val path: String, private val apk: Apk, 
     init {
         apk.lockFile(path)
         if (exists) {
-            apk.logger.info("Reading file: $path")
             outputStream().use { backend.load(it) }
             changed = false
         }
@@ -40,7 +39,6 @@ class File internal constructor(private val path: String, private val apk: Apk, 
 
     override fun close() {
         if (changed) {
-            apk.logger.info("Writing file: $path")
             backend.save(contents)
         }
         apk.unlockFile(path)
