@@ -2,7 +2,6 @@ package app.revanced.patcher
 
 import app.revanced.patcher.apk.ApkBundle
 import app.revanced.patcher.logging.Logger
-import java.io.File
 
 /**
  * Options for the [Patcher].
