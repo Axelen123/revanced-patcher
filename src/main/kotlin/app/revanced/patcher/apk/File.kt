@@ -1,8 +1,8 @@
 package app.revanced.patcher.apk
 
 import app.revanced.patcher.apk.arsc.FileBackend
-import app.revanced.patcher.util.SmartByteArrayOutputStream
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.InputStream
 import java.io.OutputStream
@@ -51,9 +51,9 @@ class File internal constructor(private val path: String, private val apk: Apk, 
 
     fun inputStream(): InputStream = ByteArrayInputStream(contents)
     fun outputStream(bufferSize: Int = backend.suggestedSize()): OutputStream =
-        object : SmartByteArrayOutputStream(bufferSize) {
+        object : ByteArrayOutputStream(bufferSize) {
             override fun close() {
-                this@File.contents = data()
+                this@File.contents = if (buf.size > count) buf.copyOf(count) else buf
                 super.close()
             }
         }
