@@ -72,7 +72,7 @@ class ResourceContext internal constructor(private val options: PatcherOptions) 
      */
     fun openFile(path: String, vararg contexts: Apk? = arrayOf(apkBundle.base, apkBundle.split?.asset)) =
         contexts.firstNotNullOfOrNull { apk ->
-            apk?.openFile(path)?.let {
+            apk?.openFile(path)?.also {
                 if (it.exists) return@firstNotNullOfOrNull it
                 it.close()
             }
