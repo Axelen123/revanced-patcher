@@ -18,15 +18,6 @@ class File internal constructor(private val path: String, private val apk: Apk, 
 
     val exists = backend.exists()
 
-    /**
-     * Returns null and closes the [File] if it does not exist.
-     * @return file The current [File], or null.
-     */
-    fun existsOrNull(): File? = if (!exists) {
-        close()
-        null
-    } else this
-
     override fun toString() = path
 
     init {

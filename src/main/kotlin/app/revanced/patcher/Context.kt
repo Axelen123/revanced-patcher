@@ -71,7 +71,12 @@ class ResourceContext internal constructor(private val options: PatcherOptions) 
      * @return A [app.revanced.patcher.apk.File] instance for the resource file or null if not found in any context.
      */
     fun openFile(path: String, vararg contexts: Apk? = arrayOf(apkBundle.base, apkBundle.split?.asset)) =
-        contexts.firstNotNullOfOrNull { apk -> apk?.openFile(path)?.existsOrNull() }
+        contexts.firstNotNullOfOrNull { apk ->
+            apk?.openFile(path)?.let {
+                if (it.exists) return@firstNotNullOfOrNull it
+                it.close()
+            }
+        }
 
     /**
      * Open an [DomFileEditor] for a given DOM file.
