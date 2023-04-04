@@ -1,13 +1,13 @@
 package app.revanced.patcher
 
 import app.revanced.patcher.apk.Apk
-import app.revanced.patcher.apk.ApkBundle
+import app.revanced.patcher.apk.arsc.findEntry
+import app.revanced.patcher.apk.arsc.typeBlocksFor
 import app.revanced.patcher.patch.PatchResult
 import app.revanced.patcher.util.method.MethodWalker
 import org.jf.dexlib2.iface.Method
 import org.w3c.dom.Document
 import java.io.Closeable
-import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 import javax.xml.parsers.DocumentBuilderFactory
@@ -16,26 +16,42 @@ import javax.xml.transform.dom.DOMSource
 import javax.xml.transform.stream.StreamResult
 
 /**
- * A common interface to constrain [Context] to [BytecodeContext] and [ResourceContext].
+ * A class containing the common elements of [BytecodeContext] and [ResourceContext].
+ *
+ *  @param options The [PatcherOptions] of the [Patcher].
  */
+sealed class Context(protected val options: PatcherOptions) {
+    /**
+     * The default [Apk]s to look in.
+     */
+    protected val defaultContexts = arrayOf(options.apkBundle.base, options.apkBundle.split?.asset)
 
-sealed interface Context
+    /**
+     * Resolve a resource id for the specified resource.
+     *
+     * @param type The type of the resource.
+     * @param name The name of the resource.
+     * @return The id of the resource.
+     */
+    fun resourceIdOf(type: String, name: String, vararg contexts: Apk? = defaultContexts) =
+        contexts.firstNotNullOfOrNull { apk ->
+            apk?.resources?.let { resources ->
+                if (resources.hasResourceTable) resources.packageBlock.typeBlocksFor(type)
+                    .firstNotNullOfOrNull { it.findEntry(name) }?.resourceId?.toLong() else null
+            }
+        } ?: throw PatchResult.Error("Could not find resource \"${name}\" of type \"${type}\"")
+}
 
 /**
  * A context for the bytecode of an [Apk.Base] file.
  *
  * @param options The [PatcherOptions] of the [Patcher].
  */
-class BytecodeContext internal constructor(options: PatcherOptions) : Context {
+class BytecodeContext internal constructor(options: PatcherOptions) : Context(options) {
     /**
      * The list of classes.
      */
     val classes = options.apkBundle.base.bytecodeData.classes
-
-    /**
-     * A [ResourceMapper]
-     */
-    val mapper = options.apkBundle.base.mapper!!
 
     /**
      * Create a [MethodWalker] instance for the current [BytecodeContext].
@@ -53,16 +69,11 @@ class BytecodeContext internal constructor(options: PatcherOptions) : Context {
  *
  * @param options The [PatcherOptions] of the [Patcher].
  */
-class ResourceContext internal constructor(private val options: PatcherOptions) : Context {
+class ResourceContext internal constructor(options: PatcherOptions) : Context(options) {
     /**
      * The current [ApkBundle].
      */
     val apkBundle = options.apkBundle
-
-    /**
-     * A [ResourceMapper]
-     */
-    val mapper = apkBundle.base.mapper!!
 
     /**
      * Open a file from the resources from the [Apk].
@@ -70,13 +81,12 @@ class ResourceContext internal constructor(private val options: PatcherOptions) 
      * @param path The path of the resource file.
      * @return A [app.revanced.patcher.apk.File] instance for the resource file or null if not found in any context.
      */
-    fun openFile(path: String, vararg contexts: Apk? = arrayOf(apkBundle.base, apkBundle.split?.asset)) =
-        contexts.firstNotNullOfOrNull { apk ->
-            apk?.openFile(path)?.also {
-                if (it.exists) return@firstNotNullOfOrNull it
-                it.close()
-            }
+    fun openFile(path: String, vararg contexts: Apk? = defaultContexts) = contexts.firstNotNullOfOrNull { apk ->
+        apk?.openFile(path)?.also {
+            if (it.exists) return@firstNotNullOfOrNull it
+            it.close()
         }
+    }
 
     /**
      * Open an [DomFileEditor] for a given DOM file.
@@ -92,7 +102,7 @@ class ResourceContext internal constructor(private val options: PatcherOptions) 
      * @param path The path to the DOM file.
      * @return A [DomFileEditor] instance.
      */
-    fun openEditor(path: String, vararg contexts: Apk? = arrayOf(apkBundle.base, apkBundle.split?.asset)) =
+    fun openEditor(path: String, vararg contexts: Apk? = defaultContexts) =
         DomFileEditor(openFile(path, *contexts) ?: throw PatchResult.Error("The file $path can not be found."))
 }
 
@@ -144,6 +154,8 @@ class DomFileEditor internal constructor(
 
         inputStream.close()
 
+        // FOR REVIEWERS: I am not entirely sure if the locking code is obsolete now. Where was it relied upon in the patches?
+
         // If the output stream is not null, do not close it.
         outputStream?.let {
             // Prevent writing to same file, if it is being locked
@@ -167,7 +179,7 @@ class DomFileEditor internal constructor(
                 return
             }
         }
-        // TODO: find a better way to ensure onClose is always called.
+
         onClose?.invoke()
         closed = true
     }

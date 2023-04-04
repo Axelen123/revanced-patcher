@@ -47,14 +47,7 @@ sealed class Apk private constructor(val path: File, name: String) {
 
     internal val module = ApkModule.loadApkFile(path, name)
 
-
     override fun toString(): String = module.moduleName
-
-    /**
-     * A [ResourceMapper].
-     */
-    @Deprecated("will be removed.")
-    internal val mapper = module.tableBlock?.pickOne()?.let { ResourceMapper(it) }
 
     /**
      * The metadata of the [Apk].
