@@ -1,6 +1,6 @@
 package app.revanced.patcher.apk
 
-import app.revanced.patcher.apk.arsc.FileBackend
+import app.revanced.patcher.arsc.FileBackend
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.Closeable

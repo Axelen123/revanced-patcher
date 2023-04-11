@@ -1,8 +1,8 @@
 package app.revanced.patcher
 
 import app.revanced.patcher.apk.Apk
-import app.revanced.patcher.apk.arsc.findEntry
-import app.revanced.patcher.apk.arsc.typeBlocksFor
+import app.revanced.patcher.arsc.findEntry
+import app.revanced.patcher.arsc.typeBlocksFor
 import app.revanced.patcher.patch.PatchResult
 import app.revanced.patcher.util.method.MethodWalker
 import org.jf.dexlib2.iface.Method

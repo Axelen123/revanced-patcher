@@ -1,4 +1,4 @@
-package app.revanced.patcher.apk.arsc
+package app.revanced.patcher.arsc
 
 import com.reandroid.arsc.base.Block
 import com.reandroid.arsc.base.BlockArray
@@ -10,7 +10,7 @@ import com.reandroid.arsc.value.ResValue
 import com.reandroid.arsc.value.TableEntry
 import com.reandroid.xml.XMLDocument
 
-
+// TODO: use ARSCLib ResourceIds and EncodeMaterials instead of sequence silliness
 internal fun <T : Block> BlockArray<T>.asSequence() = Sequence { iterator(true) }
 
 internal fun PackageBlock.specTypePairsFor(type: String) = specTypePairArray.asSequence().filter { it.typeName == type }

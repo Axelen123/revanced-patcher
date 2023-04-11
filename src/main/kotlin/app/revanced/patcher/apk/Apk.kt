@@ -4,21 +4,22 @@ package app.revanced.patcher.apk
 
 import app.revanced.patcher.Patcher
 import app.revanced.patcher.PatcherOptions
-import app.revanced.patcher.apk.arsc.*
-import app.revanced.patcher.apk.arsc.ArchiveBackend
-import app.revanced.patcher.apk.arsc.ValuesBackend
+import app.revanced.patcher.arsc.*
+import app.revanced.patcher.arsc.ArchiveBackend
+import app.revanced.patcher.arsc.LazyXMLInputSource
+import app.revanced.patcher.arsc.scanIdRegistrations
+import app.revanced.patcher.arsc.value
 import app.revanced.patcher.util.ProxyBackedClassList
 import com.reandroid.apk.AndroidFrameworks
 import com.reandroid.apk.ApkModule
 import com.reandroid.apk.xmlencoder.EncodeException
 import com.reandroid.apk.xmlencoder.EncodeMaterials
-import com.reandroid.apk.xmlencoder.ValuesEncoder
-import com.reandroid.apk.xmlencoder.XMLEncodeSource
 import com.reandroid.archive.InputSource
 import com.reandroid.arsc.chunk.PackageBlock
 import com.reandroid.arsc.chunk.TableBlock
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
 import com.reandroid.arsc.util.FrameworkTable
+import com.reandroid.arsc.value.Entry
 import com.reandroid.common.TableEntryStore
 import lanchon.multidexlib2.BasicDexEntry
 import lanchon.multidexlib2.DexIO
@@ -82,10 +83,10 @@ sealed class Apk private constructor(val path: File, name: String) {
         openFiles.forEach { options.logger.warn("File $it was never closed! File modifications will not be applied if you do not close them.") }
 
         module.apkArchive.listInputSources().forEach {
-            if (it is XMLEncodeSource) {
+            if (it is LazyXMLInputSource) {
                 if (resources.hasResourceTable) {
                     // Scan for @+id registrations.
-                    it.xmlSource.xmlDocument.scanIdRegistrations().forEach { attr ->
+                    it.document.scanIdRegistrations().forEach { attr ->
                         val name = attr.value.split('/').last()
                         options.logger.trace("Registering ID: $name")
                         resources.packageBlock.getOrCreate("", "id", name).value { res ->
@@ -96,7 +97,7 @@ sealed class Apk private constructor(val path: File, name: String) {
                 }
 
                 try {
-                    it.resXmlBlock // Force the XMLEncodeSource to encode.
+                    it.encode() // Encode the LazyXMLInputSource.
                 } catch (e: EncodeException) {
                     throw ApkException.Encode("Failed to encode ${it.name}", e)
                 }
@@ -117,11 +118,7 @@ sealed class Apk private constructor(val path: File, name: String) {
      */
     fun openFile(path: String) = File(
         path, this, when {
-            resources.hasResourceTable && path.startsWith("res/values") -> ValuesBackend(
-                File(path),
-                resources
-            )
-
+            resources.hasResourceTable && path.startsWith("res/values") -> throw Error("explode: $path")
             path.endsWith(".xml") -> ArchiveBackend.XML(path, resources, module)
             else -> ArchiveBackend.Raw(path, resources, module.apkArchive)
         }
@@ -188,7 +185,22 @@ sealed class Apk private constructor(val path: File, name: String) {
             add(tableBlock)
         }
         val encodeMaterials: EncodeMaterials = EncodeMaterials.create(tableBlock)
-        val valuesEncoder = ValuesEncoder(encodeMaterials)
+    }
+
+    fun setResource(resourceId: Int, value: Resource, configuration: String? = null) {
+        val group = resources.packageBlock.getEntryGroup(resourceId)
+        val entry = if (configuration == null) {
+            group.getDefault(true)
+        } else {
+            TODO("res config is not implemented")
+        }
+        value.write(entry, this)
+    }
+
+    fun setResource(type: String, name: String, value: Resource, configuration: String? = null): Int {
+        val entry = resources.packageBlock.getOrCreate(configuration, type, name)
+        value.write(entry, this)
+        return entry.resourceId
     }
 
     internal val resources = Resources(module.tableBlock ?: frameworkTable)
