@@ -8,7 +8,6 @@ import app.revanced.patcher.arsc.*
 import app.revanced.patcher.arsc.ArchiveBackend
 import app.revanced.patcher.arsc.LazyXMLInputSource
 import app.revanced.patcher.arsc.scanIdRegistrations
-import app.revanced.patcher.arsc.value
 import app.revanced.patcher.util.ProxyBackedClassList
 import com.reandroid.apk.AndroidFrameworks
 import com.reandroid.apk.ApkModule
@@ -20,7 +19,6 @@ import com.reandroid.arsc.chunk.PackageBlock
 import com.reandroid.arsc.chunk.TableBlock
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
 import com.reandroid.arsc.util.FrameworkTable
-import com.reandroid.arsc.value.Entry
 import com.reandroid.common.TableEntryStore
 import lanchon.multidexlib2.BasicDexEntry
 import lanchon.multidexlib2.DexIO
