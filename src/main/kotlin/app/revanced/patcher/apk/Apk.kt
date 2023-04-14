@@ -12,6 +12,7 @@ import app.revanced.patcher.arsc.value
 import app.revanced.patcher.util.ProxyBackedClassList
 import com.reandroid.apk.AndroidFrameworks
 import com.reandroid.apk.ApkModule
+import com.reandroid.apk.ResourceIds
 import com.reandroid.apk.xmlencoder.EncodeException
 import com.reandroid.apk.xmlencoder.EncodeMaterials
 import com.reandroid.archive.InputSource
@@ -32,7 +33,6 @@ import org.jf.dexlib2.writer.io.MemoryDataStore
 import org.w3c.dom.*
 import java.io.File
 import java.util.zip.ZipEntry
-
 
 
 /**
@@ -184,24 +184,40 @@ sealed class Apk private constructor(val path: File, name: String) {
             }
             add(tableBlock)
         }
-        val encodeMaterials: EncodeMaterials = EncodeMaterials.create(tableBlock)
-    }
 
-    fun setResource(resourceId: Int, value: Resource, configuration: String? = null) {
-        val group = resources.packageBlock.getEntryGroup(resourceId)
-        val entry = if (configuration == null) {
-            group.getDefault(true)
-        } else {
-            TODO("res config is not implemented")
+        // TODO: make these two lazy
+        val resourceIds = ResourceIds().takeIf { hasResourceTable }?.apply {
+            loadPackageBlock(packageBlock)
         }
-        value.write(entry, this)
+        val pkg = resourceIds?.table?.listPackages()?.get(0)
+        val encodeMaterials = EncodeMaterials().apply {
+            pkg?.let { addPackageIds(it) }
+            if (tableBlock !is FrameworkTable) {
+                currentPackage = packageBlock
+                tableBlock.frameWorks.forEach {
+                    println(it)
+                    if (it is FrameworkTable) addFramework(it)
+                }
+            } else {
+                currentPackage = TableBlock().apply { packageArray.add(PackageBlock()) }.pickOne()
+                addFramework(tableBlock)
+            }
+        }
+
+        fun resolve(ref: String): Int {
+            val resId = encodeMaterials.resolveReference(ref)
+            println("$ref -> $resId")
+            return resId
+        }
     }
 
-    fun setResource(type: String, name: String, value: Resource, configuration: String? = null): Int {
-        val entry = resources.packageBlock.getOrCreate(configuration, type, name)
-        value.write(entry, this)
-        return entry.resourceId
-    }
+    fun setResource(type: String, name: String, value: Resource, configuration: String? = null) =
+        resources.packageBlock.getOrCreate(configuration, type, name).apply {
+            val specRef = specReference
+            ensureComplex(value.complex)
+            specReference = specRef
+            value.write(this, this@Apk)
+        }.resourceId
 
     internal val resources = Resources(module.tableBlock ?: frameworkTable)
 

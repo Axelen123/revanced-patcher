@@ -4,6 +4,7 @@ import app.revanced.patcher.apk.Apk
 import com.reandroid.arsc.decoder.ValueDecoder
 import com.reandroid.arsc.decoder.ValueDecoder.EncodeResult
 import com.reandroid.arsc.value.Entry
+import com.reandroid.arsc.value.EntryHeaderMap
 import com.reandroid.arsc.value.ValueType
 import com.reandroid.arsc.value.array.ArrayBag
 import com.reandroid.arsc.value.array.ArrayBagItem
@@ -24,6 +25,9 @@ sealed class ScalarResource(internal val valueType: ValueType) : Resource {
         entry.setValueAsRaw(valueType, data(apk.resources))
     }
 
+    internal open fun toArrayItem(resources: Apk.Resources) = ArrayBagItem.create(valueType, data(resources))
+    internal open fun toStyleItem(resources: Apk.Resources) = StyleBagItem.create(valueType, data(resources))
+
     internal class Simple(valueType: ValueType, val value: Int) : ScalarResource(valueType) {
         override fun data(resources: Apk.Resources) = value
     }
@@ -41,22 +45,32 @@ class Array(private val elements: Collection<ScalarResource>) : Resource {
     override val complex = true
 
     override fun write(entry: Entry, apk: Apk) {
-        ArrayBag.create(entry).addAll(elements.map { ArrayBagItem.create(it.valueType, it.data(apk.resources)) })
+        ArrayBag.create(entry).addAll(elements.map { it.toArrayItem(apk.resources) })
     }
 }
 
-class Style(private val elements: Map<String, ScalarResource>) : Resource {
+class Style(private val elements: Map<String, ScalarResource>, private val parent: String? = null) : Resource {
     override val complex = true
 
     override fun write(entry: Entry, apk: Apk) {
         val style = StyleBag.create(entry)
-
-        elements.forEach { (key, value) ->
-            style[StyleBag.resolve(apk.resources.encodeMaterials, key)] = StyleBagItem.create(value.valueType, value.data(apk.resources))
+        val res = apk.resources
+        parent?.let {
+            (entry.tableEntry.header as EntryHeaderMap).parentId = res.resolve(parent)
         }
+
+        style.putAll(elements.mapKeys { StyleBag.resolve(res.encodeMaterials, it.key) }
+            .mapValues { it.value.toStyleItem(res) })
     }
 }
 
 class StringResource(val value: String) : ScalarResource(ValueType.STRING) {
-    override fun data(resources: Apk.Resources) = resources.tableBlock.stringPool.getOrCreate(value).index
+    private fun tableString(resources: Apk.Resources) = resources.tableBlock.stringPool.getOrCreate(value)
+    override fun data(resources: Apk.Resources) = tableString(resources).index
+    override fun toArrayItem(resources: Apk.Resources) = ArrayBagItem.string(tableString(resources))
+    override fun toStyleItem(resources: Apk.Resources) = StyleBagItem.string(tableString(resources))
+}
+
+class ReferenceResource(val ref: String) : ScalarResource(ValueType.REFERENCE) {
+    override fun data(resources: Apk.Resources) = resources.resolve(ref)
 }

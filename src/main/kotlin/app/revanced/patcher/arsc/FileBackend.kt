@@ -6,6 +6,7 @@ import com.reandroid.apk.xmlencoder.EncodeUtil
 import com.reandroid.archive.APKArchive
 import com.reandroid.archive.ByteInputSource
 import com.reandroid.archive.InputSource
+import com.reandroid.arsc.value.ResConfig
 import com.reandroid.xml.XMLDocument
 import java.io.File
 import java.io.OutputStream
@@ -36,7 +37,7 @@ internal sealed class ArchiveBackend(
      * Example: res/drawable-hdpi/icon.png -> res/4a.png
      */
     protected val archivePath =
-        if (resources.hasResourceTable && path.startsWith("res/") && path.count { it == '/' } == 2) {
+        if (resources.pkg != null && path.startsWith("res/") && path.count { it == '/' } == 2) {
             registration = File(path).let {
                 RegistrationData(
                     EncodeUtil.getQualifiersFromResFile(it),
@@ -46,14 +47,10 @@ internal sealed class ArchiveBackend(
             }
 
             with(registration) {
-                resources.packageBlock.typeBlocksFor(
-                    qualifiers,
-                    type
-                ).firstNotNullOfOrNull {
-                    it.findEntry(name)?.value { res ->
-                        res.valueAsString
-                    }
-                }
+                val resConfig = ResConfig.parse(qualifiers)
+                resources.pkg.getResourceId(type, name)
+                    ?.let { resources.packageBlock.getEntryGroup(it) }?.items?.find { it.resConfig == resConfig }
+                    ?.value { it.valueAsString }
             } ?: path
         } else {
             registration = null

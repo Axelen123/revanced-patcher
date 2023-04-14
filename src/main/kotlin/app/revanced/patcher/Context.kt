@@ -1,8 +1,6 @@
 package app.revanced.patcher
 
 import app.revanced.patcher.apk.Apk
-import app.revanced.patcher.arsc.findEntry
-import app.revanced.patcher.arsc.typeBlocksFor
 import app.revanced.patcher.patch.PatchResult
 import app.revanced.patcher.util.method.MethodWalker
 import org.jf.dexlib2.iface.Method
@@ -35,10 +33,7 @@ sealed class Context(protected val options: PatcherOptions) {
      */
     fun resourceIdOf(type: String, name: String, vararg contexts: Apk? = defaultContexts) =
         contexts.firstNotNullOfOrNull { apk ->
-            apk?.resources?.let { resources ->
-                if (resources.hasResourceTable) resources.packageBlock.typeBlocksFor(type)
-                    .firstNotNullOfOrNull { it.findEntry(name) }?.resourceId?.toLong() else null
-            }
+            apk?.resources?.pkg?.getResourceId(type, name)?.toLong()
         } ?: throw PatchResult.Error("Could not find resource \"${name}\" of type \"${type}\"")
 }
 
