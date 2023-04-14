@@ -89,9 +89,7 @@ sealed class Apk private constructor(val path: File, name: String) {
                     it.document.scanIdRegistrations().forEach { attr ->
                         val name = attr.value.split('/').last()
                         options.logger.trace("Registering ID: $name")
-                        resources.packageBlock.getOrCreate("", "id", name).value { res ->
-                            res.valueAsBoolean = false
-                        }
+                        resources.packageBlock.getOrCreate("", "id", name).resValue.valueAsBoolean = false
                         attr.value = "@id/$name"
                     }
                 }
@@ -204,11 +202,7 @@ sealed class Apk private constructor(val path: File, name: String) {
             }
         }
 
-        fun resolve(ref: String): Int {
-            val resId = encodeMaterials.resolveReference(ref)
-            println("$ref -> $resId")
-            return resId
-        }
+        fun resolve(ref: String) = encodeMaterials.resolveReference(ref)
     }
 
     fun setResource(type: String, name: String, value: Resource, configuration: String? = null) =
