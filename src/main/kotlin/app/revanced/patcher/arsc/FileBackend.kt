@@ -48,8 +48,9 @@ internal sealed class ArchiveBackend(
 
             with(registration) {
                 val resConfig = ResConfig.parse(qualifiers)
-                resources.tableBlock.resolveReference(resources.pkg.getResourceId(type, name))
-                    .single { it.resConfig == resConfig }.resValue.valueAsString
+                resources.pkg.getResourceId(type, name)?.let { resId ->
+                    resources.tableBlock.resolveReference(resId).singleOrNull { it.resConfig == resConfig }?.resValue?.valueAsString
+                }
             } ?: path
         } else {
             registration = null
