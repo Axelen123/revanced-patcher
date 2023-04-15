@@ -2,9 +2,11 @@ package app.revanced.patcher.apk
 
 import app.revanced.patcher.Patcher
 import app.revanced.patcher.PatcherOptions
-import app.revanced.patcher.logging.Logger
 import com.reandroid.apk.ApkBundle
-import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
+import com.reandroid.apk.ResourceIds
+import com.reandroid.apk.xmlencoder.EncodeMaterials
+import com.reandroid.arsc.util.FrameworkTable
+import com.reandroid.common.TableEntryStore
 
 /**
  * An [Apk] file of type [Apk.Split].
@@ -21,6 +23,13 @@ class ApkBundle(
      */
     var split = split
         internal set
+
+    private val all = sequence {
+        yield(base)
+        split?.all?.let {
+            yieldAll(it)
+        }
+    }
 
     /**
      * Refresh some additional resources in the [ApkBundle] that have been patched.
@@ -43,6 +52,39 @@ class ApkBundle(
             }
         }
     }
+
+    inner class GlobalResources {
+        val entryStore = TableEntryStore()
+        val resTable: ResourceIds.Table.Package
+        val encodeMaterials = EncodeMaterials()
+
+        init {
+            val resourceIds = ResourceIds()
+            all.map { it.resources }.forEach {
+                if (it.tableBlock != null) {
+                    entryStore.add(it.tableBlock)
+                    resourceIds.loadPackageBlock(it.packageBlock)
+                }
+                it.global = this
+            }
+
+            base.resources.also {
+                encodeMaterials.currentPackage = it.packageBlock
+                resTable =
+                    resourceIds.table.listPackages().onEach { pkg -> encodeMaterials.addPackageIds(pkg) }
+                        .single { pkg -> pkg.id == it.packageBlock!!.id.toByte() }
+
+                it.tableBlock!!.frameWorks.forEach { fw ->
+                    if (fw is FrameworkTable) {
+                        entryStore.add(fw)
+                        encodeMaterials.addFramework(fw)
+                    }
+                }
+            }
+        }
+    }
+
+    val resources = GlobalResources()
 
     /**
      * Class for [Apk.Split].

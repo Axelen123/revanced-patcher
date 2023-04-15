@@ -11,14 +11,6 @@ import com.reandroid.xml.XMLDocument
 import java.io.File
 import java.io.OutputStream
 
-// TODO: delete the interface and use ArchiveBackend directly instead.
-internal sealed interface FileBackend {
-    fun load(outputStream: OutputStream)
-    fun save(contents: ByteArray)
-    fun exists(): Boolean
-    fun suggestedSize() = 8 * 1024
-}
-
 /**
  * Represents a file in the [APKArchive].
  */
@@ -26,7 +18,7 @@ internal sealed class ArchiveBackend(
     path: String,
     protected val resources: Apk.Resources,
     private val archive: APKArchive,
-) : FileBackend {
+) {
     data class RegistrationData(val qualifiers: String, val type: String, val name: String)
 
     private val registration: RegistrationData?
@@ -37,7 +29,7 @@ internal sealed class ArchiveBackend(
      * Example: res/drawable-hdpi/icon.png -> res/4a.png
      */
     protected val archivePath =
-        if (resources.pkg != null && path.startsWith("res/") && path.count { it == '/' } == 2) {
+        if (resources.tableBlock != null && path.startsWith("res/") && path.count { it == '/' } == 2) {
             registration = File(path).let {
                 RegistrationData(
                     EncodeUtil.getQualifiersFromResFile(it),
@@ -48,8 +40,9 @@ internal sealed class ArchiveBackend(
 
             with(registration) {
                 val resConfig = ResConfig.parse(qualifiers)
-                resources.pkg.getResourceId(type, name)?.let { resId ->
-                    resources.tableBlock.resolveReference(resId).singleOrNull { it.resConfig == resConfig }?.resValue?.valueAsString
+                resources.global.resTable.getResourceId(type, name)?.let { resId ->
+                    resources.tableBlock.resolveReference(resId)
+                        .singleOrNull { it.resConfig == resConfig }?.resValue?.valueAsString
                 }
             } ?: path
         } else {
@@ -59,13 +52,16 @@ internal sealed class ArchiveBackend(
 
     protected val source: InputSource? = archive.getInputSource(archivePath)
 
-    override fun exists() = source != null
+    fun exists() = source != null
+    open fun suggestedSize() = 8 * 1024
+    abstract fun load(outputStream: OutputStream)
+    abstract fun save(contents: ByteArray)
 
     protected fun saveInputSource(src: InputSource) {
         archive.add(src)
         // Register the file in the resource table if needed.
         registration?.let {
-            resources.packageBlock.getOrCreate(
+            resources.packageBlock!!.getOrCreate(
                 it.qualifiers,
                 it.type,
                 it.name
@@ -102,7 +98,7 @@ internal sealed class ArchiveBackend(
                  */
                 is LazyXMLInputSource -> source.document
                 else -> module.loadResXmlDocument(archivePath)
-                    .decodeToXml(resources.entryStore, if (resources.hasResourceTable) resources.packageBlock.id else 0)
+                    .decodeToXml(resources.global.entryStore, resources.packageBlock?.id ?: 0)
             }.save(outputStream, false)
         }
 
@@ -110,7 +106,7 @@ internal sealed class ArchiveBackend(
             LazyXMLInputSource(
                 archivePath,
                 XMLDocument.load(String(contents)),
-                resources.encodeMaterials
+                resources.global.encodeMaterials
             )
         )
     }

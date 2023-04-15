@@ -59,13 +59,13 @@ class Style(private val elements: Map<String, ScalarResource>, private val paren
             (entry.tableEntry.header as EntryHeaderMap).parentId = res.resolve(parent)
         }
 
-        style.putAll(elements.mapKeys { StyleBag.resolve(res.encodeMaterials, it.key) }
+        style.putAll(elements.mapKeys { StyleBag.resolve(res.global.encodeMaterials, it.key) }
             .mapValues { it.value.toStyleItem(res) })
     }
 }
 
 class StringResource(val value: String) : ScalarResource(ValueType.STRING) {
-    private fun tableString(resources: Apk.Resources) = resources.tableBlock.stringPool.getOrCreate(value)
+    private fun tableString(resources: Apk.Resources) = resources.tableBlock?.stringPool?.getOrCreate(value) ?: throw Apk.ApkException.Encode("Cannot encode a string for an Apk that does not have a resource table.")
     override fun data(resources: Apk.Resources) = tableString(resources).index
     override fun toArrayItem(resources: Apk.Resources) = ArrayBagItem.string(tableString(resources))
     override fun toStyleItem(resources: Apk.Resources) = StyleBagItem.string(tableString(resources))

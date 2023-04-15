@@ -1,13 +1,13 @@
 package app.revanced.patcher.apk
 
-import app.revanced.patcher.arsc.FileBackend
+import app.revanced.patcher.arsc.ArchiveBackend
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.InputStream
 import java.io.OutputStream
 
-class File internal constructor(private val path: String, private val apk: Apk, private val backend: FileBackend) :
+class File internal constructor(private val path: String, private val apk: Apk, private val backend: ArchiveBackend) :
     Closeable {
     private var changed = false
     var contents = ByteArray(0)

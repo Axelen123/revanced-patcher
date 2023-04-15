@@ -11,7 +11,6 @@ import app.revanced.patcher.arsc.scanIdRegistrations
 import app.revanced.patcher.util.ProxyBackedClassList
 import com.reandroid.apk.AndroidFrameworks
 import com.reandroid.apk.ApkModule
-import com.reandroid.apk.ResourceIds
 import com.reandroid.apk.xmlencoder.EncodeException
 import com.reandroid.apk.xmlencoder.EncodeMaterials
 import com.reandroid.archive.InputSource
@@ -19,7 +18,7 @@ import com.reandroid.arsc.chunk.PackageBlock
 import com.reandroid.arsc.chunk.TableBlock
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
 import com.reandroid.arsc.util.FrameworkTable
-import com.reandroid.common.TableEntryStore
+import com.reandroid.arsc.value.Entry
 import lanchon.multidexlib2.BasicDexEntry
 import lanchon.multidexlib2.DexIO
 import lanchon.multidexlib2.MultiDexContainerBackedDexFile
@@ -80,30 +79,31 @@ sealed class Apk private constructor(val path: File, name: String) {
     internal fun finalize(options: PatcherOptions) {
         openFiles.forEach { options.logger.warn("File $it was never closed! File modifications will not be applied if you do not close them.") }
 
-        module.apkArchive.listInputSources().forEach {
-            if (it is LazyXMLInputSource) {
-                if (resources.hasResourceTable) {
-                    // Scan for @+id registrations.
-                    it.document.scanIdRegistrations().forEach { attr ->
-                        val name = attr.value.split('/').last()
-                        options.logger.trace("Registering ID: $name")
-                        resources.packageBlock.getOrCreate("", "id", name).resValue.valueAsBoolean = false
-                        attr.value = "@id/$name"
+        resources.useMaterials {
+            module.apkArchive.listInputSources().forEach {
+                val pkg = resources.packageBlock
+                if (it is LazyXMLInputSource) {
+                    if (resources.hasResourceTable) {
+                        // Scan for @+id registrations.
+                        it.document.scanIdRegistrations().forEach { attr ->
+                            val name = attr.value.split('/').last()
+                            options.logger.trace("Registering ID: $name")
+                            pkg!!.getOrCreate("", "id", name).resValue.valueAsBoolean = false
+                            attr.value = "@id/$name"
+                        }
+                    }
+
+                    try {
+                        it.encode() // Encode the LazyXMLInputSource.
+                    } catch (e: EncodeException) {
+                        throw ApkException.Encode("Failed to encode ${it.name}", e)
                     }
                 }
 
-                try {
-                    it.encode() // Encode the LazyXMLInputSource.
-                } catch (e: EncodeException) {
-                    throw ApkException.Encode("Failed to encode ${it.name}", e)
-                }
-            }
-
-            if (it.name == AndroidManifestBlock.FILE_NAME) {
-                // Update package block name
-                val manifest = it.openStream().use { stream -> AndroidManifestBlock.load(stream) }
-                if (resources.hasResourceTable) {
-                    resources.packageBlock.name = manifest.packageName
+                if (it.name == AndroidManifestBlock.FILE_NAME) {
+                    // Update package block name
+                    val manifest = it.openStream().use { stream -> AndroidManifestBlock.load(stream) }
+                    pkg?.name = manifest.packageName
                 }
             }
         }
@@ -112,6 +112,7 @@ sealed class Apk private constructor(val path: File, name: String) {
     /**
      * Open a [app.revanced.patcher.apk.File]
      */
+    // TODO: move the public part of this thing to Resources, leaving only a public function to open the manifest in its place.
     fun openFile(path: String) = File(
         path, this, when {
             resources.hasResourceTable && path.startsWith("res/values") -> throw Error("explode: $path")
@@ -170,10 +171,32 @@ sealed class Apk private constructor(val path: File, name: String) {
         internal val bytecodeData = BytecodeData()
     }
 
-    internal inner class Resources(val tableBlock: TableBlock) {
+    internal inner class Resources(val tableBlock: TableBlock?) {
         val hasResourceTable = module.hasTableBlock()
 
-        val packageBlock: PackageBlock = tableBlock.pickOne()
+        val packageBlock: PackageBlock? =
+            tableBlock?.packageArray?.let {
+                if (it.childes.size == 1) it[0] else it.iterator()?.asSequence()
+                    ?.single { it.name == module.packageName }
+            }
+
+        lateinit var global: ApkBundle.GlobalResources
+
+        internal fun <R> useMaterials(callback: (EncodeMaterials) -> R): R {
+            val materials = global.encodeMaterials
+            val previous = materials.currentPackage
+            if (packageBlock != null) {
+                materials.currentPackage = packageBlock
+            }
+
+            return try {
+                callback(materials)
+            } finally {
+                materials.currentPackage = previous
+            }
+        }
+
+        /*
         val entryStore = TableEntryStore().apply {
             if (hasResourceTable) {
                 tableBlock.frameWorks.forEach { add(it) }
@@ -181,7 +204,7 @@ sealed class Apk private constructor(val path: File, name: String) {
             add(tableBlock)
         }
 
-        // TODO: make these two lazy
+        // TODO: make deez global
         val resourceIds = ResourceIds().takeIf { hasResourceTable }?.apply {
             loadPackageBlock(packageBlock)
         }
@@ -191,27 +214,49 @@ sealed class Apk private constructor(val path: File, name: String) {
             if (tableBlock !is FrameworkTable) {
                 currentPackage = packageBlock
                 tableBlock.frameWorks.forEach {
-                    println(it)
                     if (it is FrameworkTable) addFramework(it)
                 }
             } else {
                 currentPackage = TableBlock().apply { packageArray.add(PackageBlock()) }.pickOne()
                 addFramework(tableBlock)
             }
+
+        }
+         */
+        internal fun <R> usePackageBlock(callback: (PackageBlock) -> R): R {
+            if (packageBlock == null) {
+                throw ApkException.Decode("Apk does not have a resource table")
+            }
+            return callback(packageBlock)
         }
 
-        fun resolve(ref: String) = encodeMaterials.resolveReference(ref)
-    }
+        fun resolve(ref: String) = useMaterials { it.resolveReference(ref) }
 
-    fun setResource(type: String, name: String, value: Resource, configuration: String? = null) =
-        resources.packageBlock.getOrCreate(configuration, type, name).apply {
+        private fun Entry.setTo(value: Resource) {
             val specRef = specReference
             ensureComplex(value.complex)
             specReference = specRef
             value.write(this, this@Apk)
-        }.resourceId
+        }
 
-    internal val resources = Resources(module.tableBlock ?: frameworkTable)
+        fun set(type: String, name: String, value: Resource, configuration: String? = null) =
+            usePackageBlock { pkg -> pkg.getOrCreate(configuration, type, name).also { it.setTo(value) }.resourceId }
+
+        fun setGroup(type: String, map: Map<String, Resource>, configuration: String? = null) {
+            usePackageBlock { pkg ->
+                pkg.getOrCreateSpecType(type).getOrCreateTypeBlock(configuration).apply {
+                    map.forEach { (name, value) -> getOrCreateEntry(name).setTo(value) }
+                }
+            }
+        }
+    }
+
+    @Deprecated("use Apk.resources instead lol")
+    fun setResource(type: String, name: String, value: Resource, configuration: String? = null) = resources.set(type, name, value, configuration)
+    @Deprecated("use Apk.resources instead lol")
+    fun setResources(type: String, map: Map<String, Resource>, configuration: String? = null) = resources.setGroup(type, map, configuration)
+
+    internal val resources = Resources(module.tableBlock)
 
     internal inner class BytecodeData {
         private val dexFile = MultiDexContainerBackedDexFile(object : MultiDexContainer<DexBackedDexFile> {
