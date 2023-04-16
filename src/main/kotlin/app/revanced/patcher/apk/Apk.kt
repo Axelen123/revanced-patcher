@@ -13,12 +13,14 @@ import com.reandroid.apk.AndroidFrameworks
 import com.reandroid.apk.ApkModule
 import com.reandroid.apk.xmlencoder.EncodeException
 import com.reandroid.apk.xmlencoder.EncodeMaterials
+import com.reandroid.apk.xmlencoder.EncodeUtil
 import com.reandroid.archive.InputSource
 import com.reandroid.arsc.chunk.PackageBlock
 import com.reandroid.arsc.chunk.TableBlock
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
 import com.reandroid.arsc.util.FrameworkTable
 import com.reandroid.arsc.value.Entry
+import com.reandroid.arsc.value.ResConfig
 import lanchon.multidexlib2.BasicDexEntry
 import lanchon.multidexlib2.DexIO
 import lanchon.multidexlib2.MultiDexContainerBackedDexFile
@@ -114,11 +116,7 @@ sealed class Apk private constructor(val path: File, name: String) {
      */
     // TODO: move the public part of this thing to Resources, leaving only a public function to open the manifest in its place.
     fun openFile(path: String) = File(
-        path, this, when {
-            resources.hasResourceTable && path.startsWith("res/values") -> throw Error("explode: $path")
-            path.endsWith(".xml") -> ArchiveBackend.XML(path, resources, module)
-            else -> ArchiveBackend.Raw(path, resources, module.apkArchive)
-        }
+        path, this, resources.getBackend(path)
     )
 
     /**
@@ -172,15 +170,15 @@ sealed class Apk private constructor(val path: File, name: String) {
     }
 
     internal inner class Resources(val tableBlock: TableBlock?) {
-        val hasResourceTable = module.hasTableBlock()
+        internal val hasResourceTable = module.hasTableBlock()
 
-        val packageBlock: PackageBlock? =
+        internal val packageBlock: PackageBlock? =
             tableBlock?.packageArray?.let {
                 if (it.childes.size == 1) it[0] else it.iterator()?.asSequence()
                     ?.single { it.name == module.packageName }
             }
 
-        lateinit var global: ApkBundle.GlobalResources
+        internal lateinit var global: ApkBundle.GlobalResources
 
         internal fun <R> useMaterials(callback: (EncodeMaterials) -> R): R {
             val materials = global.encodeMaterials
@@ -196,33 +194,6 @@ sealed class Apk private constructor(val path: File, name: String) {
             }
         }
 
-        /*
-        val entryStore = TableEntryStore().apply {
-            if (hasResourceTable) {
-                tableBlock.frameWorks.forEach { add(it) }
-            }
-            add(tableBlock)
-        }
-
-        // TODO: make deez global
-        val resourceIds = ResourceIds().takeIf { hasResourceTable }?.apply {
-            loadPackageBlock(packageBlock)
-        }
-        val pkg = resourceIds?.table?.listPackages()?.get(0)
-        val encodeMaterials = EncodeMaterials().apply {
-            pkg?.let { addPackageIds(it) }
-            if (tableBlock !is FrameworkTable) {
-                currentPackage = packageBlock
-                tableBlock.frameWorks.forEach {
-                    if (it is FrameworkTable) addFramework(it)
-                }
-            } else {
-                currentPackage = TableBlock().apply { packageArray.add(PackageBlock()) }.pickOne()
-                addFramework(tableBlock)
-            }
-
-        }
-         */
         internal fun <R> usePackageBlock(callback: (PackageBlock) -> R): R {
             if (packageBlock == null) {
                 throw ApkException.Decode("Apk does not have a resource table")
@@ -230,13 +201,50 @@ sealed class Apk private constructor(val path: File, name: String) {
             return callback(packageBlock)
         }
 
-        fun resolve(ref: String) = useMaterials { it.resolveReference(ref) }
+        internal fun resolve(ref: String) = useMaterials { it.resolveReference(ref) }
 
         private fun Entry.setTo(value: Resource) {
             val specRef = specReference
             ensureComplex(value.complex)
             specReference = specRef
             value.write(this, this@Apk)
+        }
+
+        internal fun getBackend(resPath: String): ArchiveBackend {
+            if (resPath.startsWith("res/values")) throw ApkException.Decode("Decoding the resource table as a file is not supported")
+
+            var callback: (() -> Unit)? = null
+            var archivePath = resPath
+
+            if (tableBlock != null && resPath.startsWith("res/") && resPath.count { it == '/' } == 2) {
+                val file = File(resPath)
+
+                val qualifiers = EncodeUtil.getQualifiersFromResFile(file)
+                val type = EncodeUtil.getTypeNameFromResFile(file)
+                val name = file.nameWithoutExtension
+
+                // The resource file names that app developers use might not be kept in the archive, so we have to resolve it with the resource table.
+                // Example: res/drawable-hdpi/icon.png -> res/4a.png
+                val resolvedPath = global.resTable.getResourceId(type, name)?.let { id ->
+                    val config = ResConfig.parse(qualifiers)
+                    tableBlock.resolveReference(id)
+                        .singleOrNull { it.resConfig == config }?.resValue?.valueAsString
+                }
+
+                if (resolvedPath != null) {
+                    archivePath = resolvedPath
+                } else {
+                    // An entry for this specific resource file was not found in the resource table, so we have to register it after we save.
+                    callback = { set(type, name, StringResource(archivePath), qualifiers) }
+                }
+            }
+
+            return if (resPath.endsWith(".xml")) ArchiveBackend.XML(
+                archivePath,
+                this,
+                module,
+                callback
+            ) else ArchiveBackend.Raw(archivePath, module.apkArchive, callback)
         }
 
         fun set(type: String, name: String, value: Resource, configuration: String? = null) =
@@ -252,9 +260,12 @@ sealed class Apk private constructor(val path: File, name: String) {
     }
 
     @Deprecated("use Apk.resources instead lol")
-    fun setResource(type: String, name: String, value: Resource, configuration: String? = null) = resources.set(type, name, value, configuration)
+    fun setResource(type: String, name: String, value: Resource, configuration: String? = null) =
+        resources.set(type, name, value, configuration)
+
     @Deprecated("use Apk.resources instead lol")
-    fun setResources(type: String, map: Map<String, Resource>, configuration: String? = null) = resources.setGroup(type, map, configuration)
+    fun setResources(type: String, map: Map<String, Resource>, configuration: String? = null) =
+        resources.setGroup(type, map, configuration)
 
     internal val resources = Resources(module.tableBlock)
 
