@@ -42,7 +42,7 @@ import java.util.zip.ZipEntry
  */
 sealed class Apk private constructor(val path: File, name: String) {
     companion object {
-        val frameworkTable: FrameworkTable = AndroidFrameworks.getLatest().tableBlock
+        const val manifestName = AndroidManifestBlock.FILE_NAME
     }
 
     internal val module = ApkModule.loadApkFile(path, name)
@@ -81,6 +81,9 @@ sealed class Apk private constructor(val path: File, name: String) {
     internal fun finalize(options: PatcherOptions) {
         openFiles.forEach { options.logger.warn("File $it was never closed! File modifications will not be applied if you do not close them.") }
 
+        // Update package block name
+        resources.packageBlock?.name = module.androidManifestBlock.packageName
+
         resources.useMaterials {
             module.apkArchive.listInputSources().forEach {
                 val pkg = resources.packageBlock
@@ -101,12 +104,6 @@ sealed class Apk private constructor(val path: File, name: String) {
                         throw ApkException.Encode("Failed to encode ${it.name}", e)
                     }
                 }
-
-                if (it.name == AndroidManifestBlock.FILE_NAME) {
-                    // Update package block name
-                    val manifest = it.openStream().use { stream -> AndroidManifestBlock.load(stream) }
-                    pkg?.name = manifest.packageName
-                }
             }
         }
     }
@@ -115,9 +112,16 @@ sealed class Apk private constructor(val path: File, name: String) {
      * Open a [app.revanced.patcher.apk.File]
      */
     // TODO: move the public part of this thing to Resources, leaving only a public function to open the manifest in its place.
-    fun openFile(path: String) = File(
-        path, this, resources.getBackend(path)
-    )
+    @Deprecated("use Resources.file() instead.")
+    fun openFile(path: String) = resources.file(path)
+
+    private fun refreshManifest() {
+        val inputSource = module.apkArchive.getInputSource(manifestName)
+        module.setManifest(inputSource.openStream().use { AndroidManifestBlock.load(it) })
+    }
+
+    fun openManifest() =
+        File(manifestName, this, ArchiveBackend.XML(manifestName, resources, module) { refreshManifest() })
 
     /**
      * @param out The [File] to write to.
@@ -169,7 +173,7 @@ sealed class Apk private constructor(val path: File, name: String) {
         internal val bytecodeData = BytecodeData()
     }
 
-    internal inner class Resources(val tableBlock: TableBlock?) {
+    inner class Resources(val tableBlock: TableBlock?) {
         internal val hasResourceTable = module.hasTableBlock()
 
         internal val packageBlock: PackageBlock? =
@@ -257,6 +261,10 @@ sealed class Apk private constructor(val path: File, name: String) {
                 }
             }
         }
+
+        fun file(path: String) = if (path == manifestName) openManifest() else File(
+            path, this@Apk, resources.getBackend(path)
+        )
     }
 
     @Deprecated("use Apk.resources instead lol")
@@ -267,7 +275,7 @@ sealed class Apk private constructor(val path: File, name: String) {
     fun setResources(type: String, map: Map<String, Resource>, configuration: String? = null) =
         resources.setGroup(type, map, configuration)
 
-    internal val resources = Resources(module.tableBlock)
+    val resources = Resources(module.tableBlock)
 
     internal inner class BytecodeData {
         private val dexFile = MultiDexContainerBackedDexFile(object : MultiDexContainer<DexBackedDexFile> {

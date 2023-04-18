@@ -1,5 +1,6 @@
 package app.revanced.patcher.apk
 
+import app.revanced.patcher.DomFileEditor
 import app.revanced.patcher.arsc.ArchiveBackend
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -48,4 +49,6 @@ class File internal constructor(private val path: String, private val apk: Apk, 
                 super.close()
             }
         }
+
+    fun xmlEditor() = DomFileEditor(this)
 }
