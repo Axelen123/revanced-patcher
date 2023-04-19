@@ -4,7 +4,6 @@ import app.revanced.patcher.apk.Apk
 import com.reandroid.arsc.decoder.ValueDecoder
 import com.reandroid.arsc.decoder.ValueDecoder.EncodeResult
 import com.reandroid.arsc.value.Entry
-import com.reandroid.arsc.value.EntryHeaderMap
 import com.reandroid.arsc.value.ValueType
 import com.reandroid.arsc.value.array.ArrayBag
 import com.reandroid.arsc.value.array.ArrayBagItem
@@ -56,7 +55,7 @@ class Style(private val elements: Map<String, ScalarResource>, private val paren
         val style = StyleBag.create(entry)
         val res = apk.resources
         parent?.let {
-            (entry.tableEntry.header as EntryHeaderMap).parentId = res.resolve(parent)
+            style.parentId = res.resolve(parent)
         }
 
         style.putAll(elements.mapKeys { StyleBag.resolve(res.global.encodeMaterials, it.key) }
