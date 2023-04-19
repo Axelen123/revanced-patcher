@@ -37,20 +37,15 @@ class ApkBundle(
      * @param options The [PatcherOptions] of the [Patcher].
      * @return A sequence of the [Apk] files which are being refreshed.
      */
-    internal fun finalize(options: PatcherOptions) = sequence {
-        with(base) {
-            finalize(options)
-
-            yield(SplitApkResult.Write(this))
+    internal fun finalize(options: PatcherOptions) = all.map {
+        var exception: Apk.ApkException.Encode? = null
+        try {
+            it.finalize(options)
+        } catch (e:Apk.ApkException.Encode) {
+            exception = e
         }
 
-        split?.all?.forEach { splitApk ->
-            with(splitApk) {
-                finalize(options)
-
-                yield(SplitApkResult.Write(this))
-            }
-        }
+        SplitApkResult.Write(it, exception)
     }
 
     inner class GlobalResources {
