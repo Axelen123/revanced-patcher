@@ -49,6 +49,4 @@ class File internal constructor(private val path: String, private val apk: Apk, 
                 super.close()
             }
         }
-
-    fun xmlEditor() = DomFileEditor(this)
 }

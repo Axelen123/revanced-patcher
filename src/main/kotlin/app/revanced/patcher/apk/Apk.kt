@@ -2,6 +2,7 @@
 
 package app.revanced.patcher.apk
 
+import app.revanced.patcher.DomFileEditor
 import app.revanced.patcher.Patcher
 import app.revanced.patcher.PatcherOptions
 import app.revanced.patcher.arsc.*
@@ -30,7 +31,6 @@ import org.jf.dexlib2.writer.io.MemoryDataStore
 import org.w3c.dom.*
 import java.io.File
 import java.util.zip.ZipEntry
-import kotlin.IllegalArgumentException
 
 
 /**
@@ -41,7 +41,7 @@ import kotlin.IllegalArgumentException
  */
 sealed class Apk private constructor(internal val module: ApkModule) {
     companion object {
-        const val manifestName = AndroidManifestBlock.FILE_NAME
+        const val manifest = "AndroidManifest.xml"
 
         fun new(path: File): Apk {
             val module = ApkModule.loadApkFile(path)
@@ -115,15 +115,12 @@ sealed class Apk private constructor(internal val module: ApkModule) {
      */
     // TODO: move the public part of this thing to Resources, leaving only a public function to open the manifest in its place.
     @Deprecated("use Resources.file() instead.")
-    fun openFile(path: String) = resources.file(path)
+    fun openFile(path: String) = resources.openFile(path)
 
     private fun refreshManifest() {
-        val inputSource = module.apkArchive.getInputSource(manifestName)
+        val inputSource = module.apkArchive.getInputSource(manifest)
         module.setManifest(inputSource.openStream().use { AndroidManifestBlock.load(it) })
     }
-
-    fun openManifest() =
-        File(manifestName, this, ArchiveBackend.XML(manifestName, resources, module) { refreshManifest() })
 
     /**
      * @param out The [File] to write to.
@@ -225,6 +222,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
 
         internal fun getBackend(resPath: String): ArchiveBackend {
             if (resPath.startsWith("res/values")) throw ApkException.Decode("Decoding the resource table as a file is not supported")
+            if (resPath == manifest) ArchiveBackend.XML(manifest, this, module) { refreshManifest() }
 
             var callback: (() -> Unit)? = null
             var archivePath = resPath
@@ -271,9 +269,11 @@ sealed class Apk private constructor(internal val module: ApkModule) {
             }
         }
 
-        fun file(path: String) = if (path == manifestName) openManifest() else File(
+        fun openFile(path: String) = File(
             path, this@Apk, resources.getBackend(path)
         )
+
+        fun openEditor(path: String) = DomFileEditor(openFile(path))
     }
 
     @Deprecated("use Apk.resources instead lol")
