@@ -9,7 +9,6 @@ import app.revanced.patcher.arsc.ArchiveBackend
 import app.revanced.patcher.arsc.LazyXMLInputSource
 import app.revanced.patcher.arsc.scanIdRegistrations
 import app.revanced.patcher.util.ProxyBackedClassList
-import com.reandroid.apk.AndroidFrameworks
 import com.reandroid.apk.ApkModule
 import com.reandroid.apk.xmlencoder.EncodeException
 import com.reandroid.apk.xmlencoder.EncodeMaterials
@@ -18,7 +17,6 @@ import com.reandroid.archive.InputSource
 import com.reandroid.arsc.chunk.PackageBlock
 import com.reandroid.arsc.chunk.TableBlock
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
-import com.reandroid.arsc.util.FrameworkTable
 import com.reandroid.arsc.value.Entry
 import com.reandroid.arsc.value.ResConfig
 import lanchon.multidexlib2.BasicDexEntry
@@ -32,6 +30,7 @@ import org.jf.dexlib2.writer.io.MemoryDataStore
 import org.w3c.dom.*
 import java.io.File
 import java.util.zip.ZipEntry
+import kotlin.IllegalArgumentException
 
 
 /**
@@ -40,14 +39,17 @@ import java.util.zip.ZipEntry
  * @param path The path to the apk file.
  * @param name The name of this apk.
  */
-sealed class Apk private constructor(val path: File, name: String) {
+sealed class Apk private constructor(internal val module: ApkModule) {
     companion object {
         const val manifestName = AndroidManifestBlock.FILE_NAME
+
+        fun new(path: File): Apk {
+            val module = ApkModule.loadApkFile(path)
+            return if (module.isBaseModule) Base(module) else Split(module)
+        }
     }
 
-    internal val module = ApkModule.loadApkFile(path, name)
-
-    override fun toString(): String = module.moduleName
+    open fun path() = "${this}.apk"
 
     /**
      * The metadata of the [Apk].
@@ -136,28 +138,33 @@ sealed class Apk private constructor(val path: File, name: String) {
      * @param path The path to the apk file.
      * @see Apk
      */
-    sealed class Split(path: File, name: String) : Apk(path, name) {
+    class Split(module: ApkModule) : Apk(module) {
+        enum class Type(name: String) {
+            LANGUAGE("language"), LIBRARY("library"), ASSET("asset")
+        }
 
-        /**
-         * The split apk file which contains language files.
-         *
-         * @param path The path to the apk file.
-         */
-        class Language(path: File) : Split(path, "language")
+        private companion object {
+            val architectures = setOf("armeabi_v7a", "arm64_v8a", "x86", "x86_64")
+        }
 
-        /**
-         * The split apk file which contains libraries.
-         *
-         * @param path The path to the apk file.
-         */
-        class Library(path: File) : Split(path, "library")
+        val config = module.split.removePrefix("config.")
+        val type: Type = run {
+            if (config.length == 2) {
+                return@run Type.LANGUAGE
+            }
+            if (architectures.contains(config)) {
+                return@run Type.LIBRARY
+            }
 
-        /**
-         * The split apk file which contains assets.
-         *
-         * @param path The path to the apk file.
-         */
-        class Asset(path: File) : Split(path, "asset")
+            val density = ResConfig.Density.valueOf(config)
+            if (density != null) {
+                return@run Type.ASSET
+            }
+            throw Error("Cannot figure out the split type of: $config")
+        }
+
+        override fun toString() = "${type}_$config"
+        override fun path() = "split_config.$config.apk"
     }
 
     /**
@@ -166,11 +173,13 @@ sealed class Apk private constructor(val path: File, name: String) {
      * @param path The path to the apk file.
      * @see Apk
      */
-    class Base(path: File) : Apk(path, "base") {
+    class Base(module: ApkModule) : Apk(module) {
         /**
          * Data of the [Base] apk file.
          */
         internal val bytecodeData = BytecodeData()
+
+        override fun toString() = "base"
     }
 
     inner class Resources(val tableBlock: TableBlock?) {

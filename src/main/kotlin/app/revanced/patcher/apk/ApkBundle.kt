@@ -2,11 +2,11 @@ package app.revanced.patcher.apk
 
 import app.revanced.patcher.Patcher
 import app.revanced.patcher.PatcherOptions
-import com.reandroid.apk.ApkBundle
 import com.reandroid.apk.ResourceIds
 import com.reandroid.apk.xmlencoder.EncodeMaterials
 import com.reandroid.arsc.util.FrameworkTable
 import com.reandroid.common.TableEntryStore
+import java.io.File
 
 /**
  * An [Apk] file of type [Apk.Split].
@@ -16,15 +16,33 @@ import com.reandroid.common.TableEntryStore
  */
 class ApkBundle(
     val base: Apk.Base,
-    split: Split? = null,
+    val split: Split? = null
 ) {
-    /**
-     * The [Apk.Split] files.
-     */
-    var split = split
-        internal set
 
-    private val all = sequence {
+    companion object {
+        fun new(files: List<File>): ApkBundle {
+            var base: Apk.Base? = null
+            var splits = mutableListOf<Apk.Split>()
+            files.forEach {
+                val apk = Apk.new(it)
+                when (apk) {
+                    is Apk.Base -> {
+                        if (base != null) {
+                            throw Error("Cannot have more than one base apk")
+                        }
+                        base = apk
+                    }
+                    is Apk.Split -> {
+                        splits.add(apk)
+                    }
+                }
+            }
+            val split = if (splits.size > 0) Split(splits) else null
+            return ApkBundle(base ?: throw Error("Base Apk not found"), split)
+        }
+    }
+
+    val all = sequence {
         yield(base)
         split?.all?.let {
             yieldAll(it)
@@ -52,6 +70,16 @@ class ApkBundle(
         val entryStore = TableEntryStore()
         val resTable: ResourceIds.Table.Package
         val encodeMaterials = EncodeMaterials()
+
+        /*
+        fun query(type: Apk.Split.Type, config: String): Apk.Resources? {
+            if (split == null || !split.types.contains(type)) return base.resources
+
+            return split.configs[config]?.resources
+        }
+         */
+
+        fun query(config: String) = split?.configs?.get(config)?.resources ?: base.resources
 
         init {
             val resourceIds = ResourceIds()
@@ -89,18 +117,10 @@ class ApkBundle(
      * @param language The apk file of type [Apk.Base].
      */
     class Split(
-        library: Apk.Split.Library,
-        asset: Apk.Split.Asset,
-        language: Apk.Split.Language
+        val all: List<Apk.Split>
     ) {
-        var library = library
-            internal set
-        var asset = asset
-            internal set
-        var language = language
-            internal set
-
-        val all get() = listOfNotNull(library, asset, language)
+        internal val types = all.map { it.type }.toSet()
+        val configs = all.associateBy { it.config }
     }
 
     /**

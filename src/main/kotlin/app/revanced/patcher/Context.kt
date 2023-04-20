@@ -20,11 +20,6 @@ import javax.xml.transform.stream.StreamResult
  */
 sealed class Context(protected val options: PatcherOptions) {
     /**
-     * The default [Apk]s to look in.
-     */
-    protected val defaultContexts = arrayOf(options.apkBundle.base, options.apkBundle.split?.asset)
-
-    /**
      * Resolve a resource id for the specified resource.
      *
      * @param type The type of the resource.
@@ -73,12 +68,15 @@ class ResourceContext internal constructor(options: PatcherOptions) : Context(op
      * @param path The path of the resource file.
      * @return A [app.revanced.patcher.apk.File] instance for the resource file or null if not found in any context.
      */
+    /*
     fun openFile(path: String, vararg contexts: Apk? = defaultContexts) = contexts.firstNotNullOfOrNull { apk ->
         apk?.openFile(path)?.also {
             if (it.exists) return@firstNotNullOfOrNull it
             it.close()
         }
     }
+
+     */
 
     /**
      * Open an [DomFileEditor] for a given DOM file.
@@ -94,8 +92,10 @@ class ResourceContext internal constructor(options: PatcherOptions) : Context(op
      * @param path The path to the DOM file.
      * @return A [DomFileEditor] instance.
      */
+    /*
     fun openEditor(path: String, vararg contexts: Apk? = defaultContexts) =
         DomFileEditor(openFile(path, *contexts) ?: throw PatchResult.Error("The file $path can not be found."))
+     */
 }
 
 /**
