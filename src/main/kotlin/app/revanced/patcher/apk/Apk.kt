@@ -83,9 +83,6 @@ sealed class Apk private constructor(internal val module: ApkModule) {
     internal fun finalize(options: PatcherOptions) {
         openFiles.forEach { options.logger.warn("File $it was never closed! File modifications will not be applied if you do not close them.") }
 
-        // Update package block name
-        resources.packageBlock?.name = module.androidManifestBlock.packageName
-
         resources.useMaterials {
             module.apkArchive.listInputSources().forEach {
                 val pkg = resources.packageBlock
@@ -106,6 +103,12 @@ sealed class Apk private constructor(internal val module: ApkModule) {
                         throw ApkException.Encode("Failed to encode ${it.name}", e)
                     }
                 }
+
+                if (it.name == manifest) {
+                    // Update package block name
+                    resources.packageBlock?.name =
+                        it.openStream().use { stream -> AndroidManifestBlock.load(stream) }.packageName
+                }
             }
         }
     }
@@ -116,11 +119,6 @@ sealed class Apk private constructor(internal val module: ApkModule) {
     // TODO: move the public part of this thing to Resources, leaving only a public function to open the manifest in its place.
     @Deprecated("use Resources.file() instead.")
     fun openFile(path: String) = resources.openFile(path)
-
-    private fun refreshManifest() {
-        val inputSource = module.apkArchive.getInputSource(manifest)
-        module.setManifest(inputSource.openStream().use { AndroidManifestBlock.load(it) })
-    }
 
     /**
      * @param out The [File] to write to.
@@ -183,8 +181,8 @@ sealed class Apk private constructor(internal val module: ApkModule) {
         internal val hasResourceTable = module.hasTableBlock()
 
         internal val packageBlock: PackageBlock? =
-            tableBlock?.packageArray?.let {
-                if (it.childes.size == 1) it[0] else it.iterator()?.asSequence()
+            tableBlock?.packageArray?.let { array ->
+                if (array.childes.size == 1) array[0] else array.iterator()?.asSequence()
                     ?.single { it.name == module.packageName }
             }
 
@@ -222,7 +220,6 @@ sealed class Apk private constructor(internal val module: ApkModule) {
 
         internal fun getBackend(resPath: String): ArchiveBackend {
             if (resPath.startsWith("res/values")) throw ApkException.Decode("Decoding the resource table as a file is not supported")
-            if (resPath == manifest) ArchiveBackend.XML(manifest, this, module) { refreshManifest() }
 
             var callback: (() -> Unit)? = null
             var archivePath = resPath

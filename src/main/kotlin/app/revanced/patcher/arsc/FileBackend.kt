@@ -2,9 +2,12 @@ package app.revanced.patcher.arsc
 
 import app.revanced.patcher.apk.Apk
 import com.reandroid.apk.ApkModule
+import com.reandroid.apk.xmlencoder.XMLFileEncoder
 import com.reandroid.archive.APKArchive
 import com.reandroid.archive.ByteInputSource
 import com.reandroid.archive.InputSource
+import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
+import com.reandroid.arsc.chunk.xml.ResXmlDocument
 import com.reandroid.xml.XMLDocument
 import java.io.OutputStream
 
@@ -57,8 +60,7 @@ internal sealed class ArchiveBackend(
                  * This also means we do not have to deal with encoding references to resources that do not exist yet.
                  */
                 is LazyXMLInputSource -> source.document
-                else -> module.loadResXmlDocument(path)
-                    .decodeToXml(resources.global.entryStore, resources.packageBlock?.id ?: 0)
+                else -> module.loadResXmlDocument(source).decodeToXml(resources.global.entryStore, resources.packageBlock?.id ?: 0)
             }.save(outputStream, false)
         }
 
