@@ -114,13 +114,6 @@ sealed class Apk private constructor(internal val module: ApkModule) {
     }
 
     /**
-     * Open a [app.revanced.patcher.apk.File]
-     */
-    // TODO: move the public part of this thing to Resources, leaving only a public function to open the manifest in its place.
-    @Deprecated("use Resources.file() instead.")
-    fun openFile(path: String) = resources.openFile(path)
-
-    /**
      * @param out The [File] to write to.
      */
     fun save(out: File) {
@@ -266,6 +259,9 @@ sealed class Apk private constructor(internal val module: ApkModule) {
             }
         }
 
+        /**
+         * Open a [app.revanced.patcher.apk.File]
+         */
         fun openFile(path: String) = File(
             path, this@Apk, resources.getBackend(path)
         )
