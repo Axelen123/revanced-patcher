@@ -7,6 +7,7 @@ import app.revanced.patcher.Patcher
 import app.revanced.patcher.PatcherOptions
 import app.revanced.patcher.arsc.*
 import app.revanced.patcher.arsc.ArchiveBackend
+import app.revanced.patcher.arsc.Array
 import app.revanced.patcher.arsc.LazyXMLInputSource
 import app.revanced.patcher.arsc.scanIdRegistrations
 import app.revanced.patcher.util.ProxyBackedClassList
@@ -20,6 +21,7 @@ import com.reandroid.arsc.chunk.TableBlock
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
 import com.reandroid.arsc.value.Entry
 import com.reandroid.arsc.value.ResConfig
+import com.reandroid.arsc.value.ValueType
 import lanchon.multidexlib2.BasicDexEntry
 import lanchon.multidexlib2.DexIO
 import lanchon.multidexlib2.MultiDexContainerBackedDexFile
@@ -211,7 +213,13 @@ sealed class Apk private constructor(internal val module: ApkModule) {
             value.write(this, this@Apk)
         }
 
-        internal fun getBackend(resPath: String): ArchiveBackend {
+        private fun getEntry(type: String, name: String, qualifiers: String?) =
+            global.resTable.getResourceId(type, name)?.let { id ->
+                val config = ResConfig.parse(qualifiers)
+                tableBlock?.resolveReference(id)?.singleOrNull { it.resConfig == config }
+            }
+
+        private fun getBackend(resPath: String): ArchiveBackend {
             if (resPath.startsWith("res/values")) throw ApkException.Decode("Decoding the resource table as a file is not supported")
 
             var callback: (() -> Unit)? = null
@@ -226,11 +234,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
 
                 // The resource file names that app developers use might not be kept in the archive, so we have to resolve it with the resource table.
                 // Example: res/drawable-hdpi/icon.png -> res/4a.png
-                val resolvedPath = global.resTable.getResourceId(type, name)?.let { id ->
-                    val config = ResConfig.parse(qualifiers)
-                    tableBlock.resolveReference(id)
-                        .singleOrNull { it.resConfig == config }?.resValue?.valueAsString
-                }
+                val resolvedPath = getEntry(type, name, qualifiers)?.resValue?.valueAsString
 
                 if (resolvedPath != null) {
                     archivePath = resolvedPath
@@ -258,6 +262,17 @@ sealed class Apk private constructor(internal val module: ApkModule) {
                 }
             }
         }
+
+        fun get(type: String, name: String, configuration: String? = null): Resource? =
+            getEntry(type, name, configuration)?.let { entry ->
+                if (!entry.isComplex) fromValueItem(entry.resValue) else {
+                    when (type) {
+                        "array" -> fromArrayEntry(entry)
+                        "style" -> fromStyleEntry(entry)
+                        else -> throw ApkException.Decode("Unimplemented complex value type: $type")
+                    }
+                }
+            }
 
         /**
          * Open a [app.revanced.patcher.apk.File]
