@@ -263,17 +263,6 @@ sealed class Apk private constructor(internal val module: ApkModule) {
             }
         }
 
-        fun get(type: String, name: String, configuration: String? = null): Resource? =
-            getEntry(type, name, configuration)?.let { entry ->
-                if (!entry.isComplex) fromValueItem(entry.resValue) else {
-                    when (type) {
-                        "array" -> fromArrayEntry(entry)
-                        "style" -> fromStyleEntry(entry)
-                        else -> throw ApkException.Decode("Unimplemented complex value type: $type")
-                    }
-                }
-            }
-
         /**
          * Open a [app.revanced.patcher.apk.File]
          */
