@@ -11,16 +11,13 @@ import com.reandroid.arsc.value.array.ArrayBagItem
 import com.reandroid.arsc.value.style.StyleBag
 import com.reandroid.arsc.value.style.StyleBagItem
 
-sealed interface Resource {
-    val complex: Boolean
+sealed class Resource(val complex: Boolean) {
+    internal abstract fun write(entry: Entry, resources: Apk.Resources)
 
-    fun write(entry: Entry, resources: Apk.Resources)
-
-    fun decode(resources: Apk.Resources): String
+    abstract fun decode(resources: Apk.Resources): String
 }
 
-sealed class ScalarResource(protected val valueType: ValueType) : Resource {
-    override val complex = false
+sealed class ScalarResource(protected val valueType: ValueType) : Resource(false) {
     internal abstract fun data(resources: Apk.Resources): Int
 
     override fun write(entry: Entry, resources: Apk.Resources) {
@@ -54,8 +51,7 @@ fun dimension(value: String): ScalarResource = encoded(ValueDecoder.encodeDimens
 fun float(n: Float): ScalarResource = ScalarResource.Simple(ValueType.FLOAT, n.toBits())
 fun integer(n: Int): ScalarResource = ScalarResource.Simple(ValueType.INT_DEC, n)
 
-class Array(private val elements: Collection<ScalarResource>) : Resource {
-    override val complex = true
+class Array(private val elements: Collection<ScalarResource>) : Resource(true) {
 
     override fun write(entry: Entry, resources: Apk.Resources) {
         ArrayBag.create(entry).addAll(elements.map { it.toArrayItem(resources) })
@@ -65,8 +61,7 @@ class Array(private val elements: Collection<ScalarResource>) : Resource {
 }
 
 // TODO: implement flags/enums
-class Style(private val elements: Map<String, ScalarResource>, private val parent: String? = null) : Resource {
-    override val complex = true
+class Style(private val elements: Map<String, ScalarResource>, private val parent: String? = null) : Resource(true) {
 
     override fun write(entry: Entry, resources: Apk.Resources) {
         val style = StyleBag.create(entry)
