@@ -162,7 +162,10 @@ class Patcher(private val options: PatcherOptions) {
         val patchResults = buildList {
             logger.info("Writing patched resources")
             options.apkBundle.finalize(options).forEach { writeResult ->
-                if (writeResult.exception is Apk.ApkException.Encode) return@forEach
+                if (writeResult.exception != null) {
+                    logger.error("Got exception while writing ${writeResult.apk}: ${writeResult.exception.stackTraceToString()}")
+                    return@forEach
+                }
 
                 val patch = writeResult.apk.let {
                     when (it) {

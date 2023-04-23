@@ -210,7 +210,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
             val specRef = specReference
             ensureComplex(value.complex)
             specReference = specRef
-            value.write(this, this@Apk)
+            value.write(this, this@Resources)
         }
 
         private fun getEntry(type: String, name: String, qualifiers: String?) =
