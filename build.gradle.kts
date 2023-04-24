@@ -11,23 +11,23 @@ val githubPassword: String = project.findProperty("gpr.key") as? String ?: Syste
 
 repositories {
     mavenCentral()
-    maven {
-        url = uri("https://maven.pkg.github.com/revanced/multidexlib2")
+    fun githubPackages(repo: String) = maven {
+        url = uri("https://maven.pkg.github.com/revanced/$repo")
         credentials {
             username = githubUsername
             password = githubPassword
         }
     }
-    flatDir {
-        dirs("libs")
-    }
+
+    githubPackages("multidexlib2")
+    githubPackages("ARSCLib")
 }
 
 dependencies {
     implementation("xpp3:xpp3:1.1.4c")
     implementation("app.revanced:smali:2.5.3-a3836654")
     implementation("app.revanced:multidexlib2:2.5.3-a3836654")
-    implementation("com.reandroid.arsclib:ARSCLib")
+    implementation("app.revanced:arsclib:1.1.6")
     implementation(kotlin("reflect"))
 
     compileOnly("com.google.android:android:4.1.1.4")
