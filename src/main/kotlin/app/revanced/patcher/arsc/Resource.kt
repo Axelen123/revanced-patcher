@@ -18,7 +18,7 @@ sealed class Resource(val complex: Boolean) {
 }
 
 sealed class ScalarResource(private val valueType: ValueType) : Resource(false) {
-    internal abstract fun data(resources: Apk.Resources): Int
+    protected abstract fun data(resources: Apk.Resources): Int
 
     override fun write(entry: Entry, resources: Apk.Resources) {
         entry.setValueAsRaw(valueType, data(resources))
@@ -32,7 +32,7 @@ sealed class ScalarResource(private val valueType: ValueType) : Resource(false) 
     }
 }
 
-internal fun encoded(encodeResult: EncodeResult?) = encodeResult?.let { ScalarResource.Simple(it.valueType, it.value) }
+private fun encoded(encodeResult: EncodeResult?) = encodeResult?.let { ScalarResource.Simple(it.valueType, it.value) }
     ?: throw Apk.ApkException.Encode("Failed to encode value")
 
 fun color(hex: String): ScalarResource = encoded(ValueDecoder.encodeColor(hex))
@@ -61,11 +61,13 @@ class Style(private val elements: Map<String, ScalarResource>, private val paren
     }
 }
 
-class Plurals(private val elements: Map<PluralsQuantity, String>) : Resource(true) {
+class Plurals(private val elements: Map<String, String>) : Resource(true) {
     override fun write(entry: Entry, resources: Apk.Resources) {
         val plurals = PluralsBag.create(entry)
 
-        plurals.putAll(elements.mapValues { (_, v) -> PluralsBagItem.string(resources.tableBlock!!.stringPool.getOrCreate(v)) })
+        plurals.putAll(elements.asIterable().associate { (k, v) ->
+            PluralsQuantity.valueOf(k) to PluralsBagItem.string(resources.tableBlock!!.stringPool.getOrCreate(v))
+        })
     }
 }
 
