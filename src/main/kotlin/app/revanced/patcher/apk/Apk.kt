@@ -49,8 +49,6 @@ sealed class Apk private constructor(internal val module: ApkModule) {
         }
     }
 
-    open fun path() = "${this}.apk"
-
     /**
      * The metadata of the [Apk].
      */
@@ -80,7 +78,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
      *
      * @param options The [PatcherOptions] of the [Patcher].
      */
-    internal fun finalize(options: PatcherOptions) {
+    internal open fun finalize(options: PatcherOptions) {
         openFiles.forEach { options.logger.warn("File $it was never closed! File modifications will not be applied if you do not close them.") }
 
         resources.useMaterials {
@@ -111,63 +109,6 @@ sealed class Apk private constructor(internal val module: ApkModule) {
                 }
             }
         }
-    }
-
-    /**
-     * @param out The [File] to write to.
-     */
-    fun save(out: File) {
-        module.writeApk(out)
-    }
-
-    /**
-     * The split apk file that is to be patched.
-     *
-     * @param path The path to the apk file.
-     * @see Apk
-     */
-    class Split(module: ApkModule) : Apk(module) {
-        enum class Type(name: String) {
-            LANGUAGE("language"), LIBRARY("library"), ASSET("asset")
-        }
-
-        private companion object {
-            val architectures = setOf("armeabi_v7a", "arm64_v8a", "x86", "x86_64")
-        }
-
-        val config = module.split.removePrefix("config.")
-        val type: Type = run {
-            if (config.length == 2) {
-                return@run Type.LANGUAGE
-            }
-            if (architectures.contains(config)) {
-                return@run Type.LIBRARY
-            }
-
-            val density = ResConfig.Density.valueOf(config)
-            if (density != null) {
-                return@run Type.ASSET
-            }
-            throw Error("Cannot figure out the split type of: $config")
-        }
-
-        override fun toString() = "${type}_$config"
-        override fun path() = "split_config.$config.apk"
-    }
-
-    /**
-     * The base apk file that is to be patched.
-     *
-     * @param path The path to the apk file.
-     * @see Apk
-     */
-    class Base(module: ApkModule) : Apk(module) {
-        /**
-         * Data of the [Base] apk file.
-         */
-        internal val bytecodeData = BytecodeData()
-
-        override fun toString() = "base"
     }
 
     inner class Resources(val tableBlock: TableBlock?) {
@@ -345,6 +286,70 @@ sealed class Apk private constructor(internal val module: ApkModule) {
          */
         var packageVersion: String = "0.0.0"
             internal set
+    }
+
+
+    /**
+     * @param out The [File] to write to.
+     */
+    fun save(out: File) {
+        module.writeApk(out)
+    }
+
+    /**
+     * The split apk file that is to be patched.
+     *
+     * @param path The path to the apk file.
+     * @see Apk
+     */
+    class Split(module: ApkModule) : Apk(module) {
+        enum class Type {
+            LANGUAGE, LIBRARY, ASSET;
+        }
+
+        private companion object {
+            val architectures = setOf("armeabi_v7a", "arm64_v8a", "x86", "x86_64")
+        }
+
+        val config = module.split.removePrefix("config.")
+        val type: Type = run {
+            if (config.length == 2) {
+                return@run Type.LANGUAGE
+            }
+            if (architectures.contains(config)) {
+                return@run Type.LIBRARY
+            }
+
+            val density = ResConfig.Density.valueOf(config)
+            if (density != null) {
+                return@run Type.ASSET
+            }
+            throw Error("Cannot figure out the split type of: $config")
+        }
+
+        override fun toString() = "split_config.$config.apk"
+    }
+
+    /**
+     * The base apk file that is to be patched.
+     *
+     * @param path The path to the apk file.
+     * @see Apk
+     */
+    class Base(module: ApkModule) : Apk(module) {
+        /**
+         * Data of the [Base] apk file.
+         */
+        internal val bytecodeData = BytecodeData()
+
+        override fun toString() = "base.apk"
+
+        override fun finalize(options: PatcherOptions) {
+            super.finalize(options)
+
+            options.logger.info("Writing patched dex files")
+            bytecodeData.writeDexFiles()
+        }
     }
 
     /**

@@ -176,13 +176,8 @@ class Patcher(private val options: PatcherOptions) {
 
                 add(patch)
 
-                logger.info("Patched resources written for ${writeResult.apk} apk file")
+                logger.info("Patched resources written for ${writeResult.apk}")
             }
-        }
-
-        options.apkBundle.base.apply {
-            logger.info("Writing patched dex files")
-            bytecodeData.writeDexFiles()
         }
 
         return PatcherResult(patchResults)
