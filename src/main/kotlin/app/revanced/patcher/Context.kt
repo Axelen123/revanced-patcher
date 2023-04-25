@@ -1,6 +1,7 @@
 package app.revanced.patcher
 
 import app.revanced.patcher.apk.Apk
+import app.revanced.patcher.apk.ResourceFile
 import app.revanced.patcher.patch.PatchResult
 import app.revanced.patcher.util.method.MethodWalker
 import org.jf.dexlib2.iface.Method
@@ -63,39 +64,12 @@ class ResourceContext internal constructor(options: PatcherOptions) : Context(op
     val apkBundle = options.apkBundle
 
     /**
-     * Open a file from the resources from the [Apk].
-     *
-     * @param path The path of the resource file.
-     * @return A [app.revanced.patcher.apk.File] instance for the resource file or null if not found in any context.
-     */
-    /*
-    fun openFile(path: String, vararg contexts: Apk? = defaultContexts) = contexts.firstNotNullOfOrNull { apk ->
-        apk?.openFile(path)?.also {
-            if (it.exists) return@firstNotNullOfOrNull it
-            it.close()
-        }
-    }
-
-     */
-
-    /**
      * Open an [DomFileEditor] for a given DOM file.
      *
      * @param inputStream The input stream to read the DOM file from.
      * @return A [DomFileEditor] instance.
      */
     fun openEditor(inputStream: InputStream) = DomFileEditor(inputStream)
-
-    /**
-     * Open an [DomFileEditor] for a given DOM file.
-     *
-     * @param path The path to the DOM file.
-     * @return A [DomFileEditor] instance.
-     */
-    /*
-    fun openEditor(path: String, vararg contexts: Apk? = defaultContexts) =
-        DomFileEditor(openFile(path, *contexts) ?: throw PatchResult.Error("The file $path can not be found."))
-     */
 }
 
 /**
@@ -127,7 +101,7 @@ class DomFileEditor internal constructor(
     // Lazily open an output stream.
     // This is required because when constructing a DomFileEditor the output stream is created along with the input stream, which is not allowed.
     // The workaround is to lazily create the output stream. This way it would be used after the input stream is closed, which happens in the constructor.
-    internal constructor(file: app.revanced.patcher.apk.File) : this(
+    internal constructor(file: ResourceFile) : this(
         file.inputStream(),
         lazy { file.outputStream() },
         { file.close() }) {

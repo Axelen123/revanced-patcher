@@ -2,19 +2,16 @@ package app.revanced.patcher.arsc
 
 import app.revanced.patcher.apk.Apk
 import com.reandroid.apk.ApkModule
-import com.reandroid.apk.xmlencoder.XMLFileEncoder
 import com.reandroid.archive.APKArchive
 import com.reandroid.archive.ByteInputSource
 import com.reandroid.archive.InputSource
-import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
-import com.reandroid.arsc.chunk.xml.ResXmlDocument
 import com.reandroid.xml.XMLDocument
 import java.io.OutputStream
 
 /**
  * Represents a file in the [APKArchive].
  */
-internal sealed class ArchiveBackend(
+internal sealed class ResourceFileImpl(
     protected val path: String,
     private val archive: APKArchive,
     private val onSave: (() -> Unit)?
@@ -35,7 +32,7 @@ internal sealed class ArchiveBackend(
      * Loads/saves the raw contents of the file in the archive.
      */
     class Raw(path: String, archive: APKArchive, onSave: (() -> Unit)? = null) :
-        ArchiveBackend(path, archive, onSave) {
+        ResourceFileImpl(path, archive, onSave) {
         override fun load(outputStream: OutputStream) {
             source!!.write(outputStream)
         }
@@ -52,7 +49,7 @@ internal sealed class ArchiveBackend(
         private val resources: Apk.Resources,
         private val module: ApkModule,
         onSave: (() -> Unit)? = null
-    ) : ArchiveBackend(path, module.apkArchive, onSave) {
+    ) : ResourceFileImpl(path, module.apkArchive, onSave) {
         override fun load(outputStream: OutputStream) {
             when (source) {
                 /**

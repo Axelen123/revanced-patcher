@@ -6,8 +6,7 @@ import app.revanced.patcher.DomFileEditor
 import app.revanced.patcher.Patcher
 import app.revanced.patcher.PatcherOptions
 import app.revanced.patcher.arsc.*
-import app.revanced.patcher.arsc.ArchiveBackend
-import app.revanced.patcher.arsc.Array
+import app.revanced.patcher.arsc.ResourceFileImpl
 import app.revanced.patcher.arsc.LazyXMLInputSource
 import app.revanced.patcher.arsc.scanIdRegistrations
 import app.revanced.patcher.util.ProxyBackedClassList
@@ -21,7 +20,6 @@ import com.reandroid.arsc.chunk.TableBlock
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
 import com.reandroid.arsc.value.Entry
 import com.reandroid.arsc.value.ResConfig
-import com.reandroid.arsc.value.ValueType
 import lanchon.multidexlib2.BasicDexEntry
 import lanchon.multidexlib2.DexIO
 import lanchon.multidexlib2.MultiDexContainerBackedDexFile
@@ -219,7 +217,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
                 tableBlock?.resolveReference(id)?.singleOrNull { it.resConfig == config }
             }
 
-        private fun getBackend(resPath: String): ArchiveBackend {
+        private fun getBackend(resPath: String): ResourceFileImpl {
             if (resPath.startsWith("res/values")) throw ApkException.Decode("Decoding the resource table as a file is not supported")
 
             var callback: (() -> Unit)? = null
@@ -244,12 +242,12 @@ sealed class Apk private constructor(internal val module: ApkModule) {
                 }
             }
 
-            return if (resPath.endsWith(".xml")) ArchiveBackend.XML(
+            return if (resPath.endsWith(".xml")) ResourceFileImpl.XML(
                 archivePath,
                 this,
                 module,
                 callback
-            ) else ArchiveBackend.Raw(archivePath, module.apkArchive, callback)
+            ) else ResourceFileImpl.Raw(archivePath, module.apkArchive, callback)
         }
 
         fun set(type: String, name: String, value: Resource, configuration: String? = null) =
@@ -264,9 +262,9 @@ sealed class Apk private constructor(internal val module: ApkModule) {
         }
 
         /**
-         * Open a [app.revanced.patcher.apk.File]
+         * Open a [app.revanced.patcher.apk.ResourceFile]
          */
-        fun openFile(path: String) = File(
+        fun openFile(path: String) = ResourceFile(
             path, this@Apk, resources.getBackend(path)
         )
 

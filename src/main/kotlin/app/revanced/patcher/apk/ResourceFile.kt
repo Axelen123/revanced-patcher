@@ -1,14 +1,13 @@
 package app.revanced.patcher.apk
 
-import app.revanced.patcher.DomFileEditor
-import app.revanced.patcher.arsc.ArchiveBackend
+import app.revanced.patcher.arsc.ResourceFileImpl
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.Closeable
 import java.io.InputStream
 import java.io.OutputStream
 
-class File internal constructor(private val path: String, private val apk: Apk, private val backend: ArchiveBackend) :
+class ResourceFile internal constructor(private val path: String, private val apk: Apk, private val backend: ResourceFileImpl) :
     Closeable {
     private var changed = false
     var contents = ByteArray(0)
@@ -45,7 +44,7 @@ class File internal constructor(private val path: String, private val apk: Apk, 
     fun outputStream(bufferSize: Int = backend.suggestedSize()): OutputStream =
         object : ByteArrayOutputStream(bufferSize) {
             override fun close() {
-                this@File.contents = if (buf.size > count) buf.copyOf(count) else buf
+                this@ResourceFile.contents = if (buf.size > count) buf.copyOf(count) else buf
                 super.close()
             }
         }
