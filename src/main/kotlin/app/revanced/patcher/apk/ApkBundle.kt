@@ -28,7 +28,7 @@ class ApkBundle(
                 when (apk) {
                     is Apk.Base -> {
                         if (base != null) {
-                            throw Error("Cannot have more than one base apk")
+                            throw IllegalArgumentException("Cannot have more than one base apk")
                         }
                         base = apk
                     }
@@ -38,7 +38,7 @@ class ApkBundle(
                 }
             }
             val split = if (splits.size > 0) Split(splits) else null
-            return ApkBundle(base ?: throw Error("Base Apk not found"), split)
+            return ApkBundle(base ?: throw IllegalArgumentException("Base Apk not found"), split)
         }
     }
 
@@ -111,7 +111,6 @@ class ApkBundle(
     class Split(
         val all: List<Apk.Split>
     ) {
-        internal val types = all.map { it.type }.toSet()
         val configs = all.associateBy { it.config }
     }
 
