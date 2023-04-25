@@ -2,7 +2,6 @@ package app.revanced.patcher
 
 import app.revanced.patcher.apk.Apk
 import app.revanced.patcher.apk.ResourceFile
-import app.revanced.patcher.patch.PatchResult
 import app.revanced.patcher.util.method.MethodWalker
 import org.jf.dexlib2.iface.Method
 import org.w3c.dom.Document
@@ -15,31 +14,22 @@ import javax.xml.transform.dom.DOMSource
 import javax.xml.transform.stream.StreamResult
 
 /**
- * A class containing the common elements of [BytecodeContext] and [ResourceContext].
- *
- *  @param options The [PatcherOptions] of the [Patcher].
+ * A common interface to constrain [Context] to [BytecodeContext] and [ResourceContext].
  */
-sealed class Context(protected val options: PatcherOptions) {
-    /**
-     * Resolve a resource id for the specified resource.
-     *
-     * @param type The type of the resource.
-     * @param name The name of the resource.
-     * @return The id of the resource.
-     */
-    fun resourceIdOf(type: String, name: String) = options.apkBundle.resources.resTable.getResourceId(type, name)?.toLong() ?: throw Apk.ApkException.ReferenceError(type, name)
-}
+sealed interface Context
 
 /**
  * A context for the bytecode of an [Apk.Base] file.
  *
  * @param options The [PatcherOptions] of the [Patcher].
  */
-class BytecodeContext internal constructor(options: PatcherOptions) : Context(options) {
+class BytecodeContext internal constructor(options: PatcherOptions) : Context {
     /**
      * The list of classes.
      */
     val classes = options.apkBundle.base.bytecodeData.classes
+
+    private val resources = options.apkBundle.resources
 
     /**
      * Create a [MethodWalker] instance for the current [BytecodeContext].
@@ -50,6 +40,15 @@ class BytecodeContext internal constructor(options: PatcherOptions) : Context(op
     fun toMethodWalker(startMethod: Method): MethodWalker {
         return MethodWalker(this, startMethod)
     }
+
+    /**
+     * Resolve a resource id for the specified resource.
+     *
+     * @param type The type of the resource.
+     * @param name The name of the resource.
+     * @return The id of the resource.
+     */
+    fun resourceIdOf(type: String, name: String) = resources.resolve(type, name).toLong()
 }
 
 /**
@@ -57,7 +56,7 @@ class BytecodeContext internal constructor(options: PatcherOptions) : Context(op
  *
  * @param options The [PatcherOptions] of the [Patcher].
  */
-class ResourceContext internal constructor(options: PatcherOptions) : Context(options) {
+class ResourceContext internal constructor(options: PatcherOptions) : Context {
     /**
      * The current [ApkBundle].
      */

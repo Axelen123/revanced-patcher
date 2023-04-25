@@ -67,11 +67,20 @@ class ApkBundle(
     }
 
     inner class GlobalResources {
-        val entryStore = TableEntryStore()
-        val resTable: ResourceIds.Table.Package
-        val encodeMaterials = EncodeMaterials()
+        internal val entryStore = TableEntryStore()
+        internal val resTable: ResourceIds.Table.Package
+        internal val encodeMaterials = EncodeMaterials()
 
         fun query(config: String) = split?.configs?.get(config)?.resources ?: base.resources
+
+        /**
+         * Resolve a resource id for the specified resource.
+         *
+         * @param type The type of the resource.
+         * @param name The name of the resource.
+         * @return The id of the resource.
+         */
+        fun resolve(type: String, name: String) = resTable.getResourceId(type, name) ?: throw Apk.ApkException.ReferenceError(type, name)
 
         init {
             val resourceIds = ResourceIds()
