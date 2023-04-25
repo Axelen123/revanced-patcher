@@ -27,7 +27,7 @@ sealed class Context(protected val options: PatcherOptions) {
      * @param name The name of the resource.
      * @return The id of the resource.
      */
-    fun resourceIdOf(type: String, name: String) = options.apkBundle.resources.resTable.getResourceId(type, name)?.toLong() ?: throw PatchResult.Error("Could not find resource \"${name}\" of type \"${type}\"")
+    fun resourceIdOf(type: String, name: String) = options.apkBundle.resources.resTable.getResourceId(type, name)?.toLong() ?: throw Apk.ApkException.ReferenceError(type, name)
 }
 
 /**

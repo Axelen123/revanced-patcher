@@ -56,28 +56,20 @@ class ApkBundle(
      * @return A sequence of the [Apk] files which are being refreshed.
      */
     internal fun finalize(options: PatcherOptions) = all.map {
-        var exception: Apk.ApkException.Encode? = null
+        var exception: Apk.ApkException? = null
         try {
             it.finalize(options)
-        } catch (e:Apk.ApkException.Encode) {
+        } catch (e:Apk.ApkException) {
             exception = e
         }
 
-        SplitApkResult.Write(it, exception)
+        SplitApkResult(it, exception)
     }
 
     inner class GlobalResources {
         val entryStore = TableEntryStore()
         val resTable: ResourceIds.Table.Package
         val encodeMaterials = EncodeMaterials()
-
-        /*
-        fun query(type: Apk.Split.Type, config: String): Apk.Resources? {
-            if (split == null || !split.types.contains(type)) return base.resources
-
-            return split.configs[config]?.resources
-        }
-         */
 
         fun query(config: String) = split?.configs?.get(config)?.resources ?: base.resources
 
@@ -129,13 +121,5 @@ class ApkBundle(
      * @param apk The corresponding [Apk] file.
      * @param exception The optional [Apk.ApkException] when an exception occurred.
      */
-    sealed class SplitApkResult(val apk: Apk, val exception: Apk.ApkException? = null) {
-        /**
-         * The result of writing a [Split] [Apk] file.
-         *
-         * @param apk The corresponding [Apk] file.
-         * @param exception The optional [Apk.ApkException] when an exception occurred.
-         */
-        class Write(apk: Apk, exception: Apk.ApkException.Encode? = null) : SplitApkResult(apk, exception)
-    }
+    data class SplitApkResult(val apk: Apk, val exception: Apk.ApkException? = null)
 }

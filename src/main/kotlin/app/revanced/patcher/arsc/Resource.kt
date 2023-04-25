@@ -1,6 +1,7 @@
 package app.revanced.patcher.arsc
 
 import app.revanced.patcher.apk.Apk
+import com.reandroid.apk.xmlencoder.EncodeException
 import com.reandroid.arsc.decoder.ValueDecoder
 import com.reandroid.arsc.decoder.ValueDecoder.EncodeResult
 import com.reandroid.arsc.value.Entry
@@ -40,6 +41,7 @@ fun dimension(value: String): ScalarResource = encoded(ValueDecoder.encodeDimens
 fun float(n: Float): ScalarResource = ScalarResource.Simple(ValueType.FLOAT, n.toBits())
 fun integer(n: Int): ScalarResource = ScalarResource.Simple(ValueType.INT_DEC, n)
 fun reference(resourceId: Int): ScalarResource = ScalarResource.Simple(ValueType.REFERENCE, resourceId)
+fun reference(resources: Apk.Resources, ref: String) = reference(resources.resolve(ref))
 
 class Array(private val elements: Collection<ScalarResource>) : Resource(true) {
     override fun write(entry: Entry, resources: Apk.Resources) {
@@ -73,13 +75,9 @@ class Plurals(private val elements: Map<String, String>) : Resource(true) {
 
 class StringResource(val value: String) : ScalarResource(ValueType.STRING) {
     private fun tableString(resources: Apk.Resources) = resources.tableBlock?.stringPool?.getOrCreate(value)
-        ?: throw Apk.ApkException.Encode("Cannot encode a string for an Apk that does not have a resource table.")
+        ?: throw Apk.ApkException.MissingResourceTable
 
     override fun data(resources: Apk.Resources) = tableString(resources).index
     override fun toArrayItem(resources: Apk.Resources) = ArrayBagItem.string(tableString(resources))
     override fun toStyleItem(resources: Apk.Resources) = StyleBagItem.string(tableString(resources))
-}
-
-class ReferenceResource(val ref: String) : ScalarResource(ValueType.REFERENCE) {
-    override fun data(resources: Apk.Resources) = resources.resolve(ref)
 }

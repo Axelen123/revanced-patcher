@@ -197,12 +197,16 @@ sealed class Apk private constructor(internal val module: ApkModule) {
 
         internal fun <R> usePackageBlock(callback: (PackageBlock) -> R): R {
             if (packageBlock == null) {
-                throw ApkException.Decode("Apk does not have a resource table")
+                throw ApkException.MissingResourceTable
             }
             return callback(packageBlock)
         }
 
-        internal fun resolve(ref: String) = useMaterials { it.resolveReference(ref) }
+        internal fun resolve(ref: String) = try {
+            useMaterials { it.resolveReference(ref) }
+        } catch (e: EncodeException) {
+            throw ApkException.ReferenceError(ref, e)
+        }
 
         private fun Entry.setTo(value: Resource) {
             val specRef = specReference
@@ -373,5 +377,11 @@ sealed class Apk private constructor(internal val module: ApkModule) {
          * @param throwable The corresponding [Throwable].
          */
         class Encode(message: String, throwable: Throwable? = null) : ApkException(message, throwable)
+
+        class ReferenceError(ref: String, throwable: Throwable? = null) : ApkException("Failed to resolve: $ref", throwable) {
+            constructor(type: String, name: String, throwable: Throwable? = null) : this("@$type/$name", throwable)
+        }
+
+        object MissingResourceTable : ApkException("Apk does not have a resource table.")
     }
 }
