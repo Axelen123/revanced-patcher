@@ -68,7 +68,7 @@ class Plurals(private val elements: Map<String, String>) : Resource(true) {
         val plurals = PluralsBag.create(entry)
 
         plurals.putAll(elements.asIterable().associate { (k, v) ->
-            PluralsQuantity.valueOf(k) to PluralsBagItem.string(resources.tableBlock!!.stringPool.getOrCreate(v))
+            PluralsQuantity.value(k) to PluralsBagItem.string(resources.tableBlock!!.stringPool.getOrCreate(v))
         })
     }
 }
