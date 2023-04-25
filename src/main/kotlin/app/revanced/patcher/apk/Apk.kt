@@ -275,14 +275,6 @@ sealed class Apk private constructor(internal val module: ApkModule) {
         fun openEditor(path: String) = DomFileEditor(openFile(path))
     }
 
-    @Deprecated("use Apk.resources instead lol")
-    fun setResource(type: String, name: String, value: Resource, configuration: String? = null) =
-        resources.set(type, name, value, configuration)
-
-    @Deprecated("use Apk.resources instead lol")
-    fun setResources(type: String, map: Map<String, Resource>, configuration: String? = null) =
-        resources.setGroup(type, map, configuration)
-
     val resources = Resources(module.tableBlock)
 
     internal inner class BytecodeData {
