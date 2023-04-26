@@ -1,6 +1,5 @@
 package app.revanced.patcher
 
-import app.revanced.patcher.apk.Apk
 import app.revanced.patcher.logging.Logger
 import app.revanced.patcher.patch.PatchClass
 import app.revanced.patcher.util.ClassMerger.merge
@@ -10,7 +9,6 @@ import java.io.File
 data class PatcherContext(
     val options: PatcherOptions,
 ) {
-    val packageMetadata = options.apkBundle.base.packageMetadata
     internal val patches = mutableListOf<PatchClass>()
     internal val integrations = Integrations(this)
     internal val bytecodeContext = BytecodeContext(options)
