@@ -1,5 +1,5 @@
 plugins {
-    kotlin("jvm") version "1.7.0"
+    kotlin("jvm") version "1.8.10"
     java
     `maven-publish`
 }
@@ -28,11 +28,9 @@ dependencies {
     implementation("app.revanced:smali:2.5.3-a3836654")
     implementation("app.revanced:multidexlib2:2.5.3-a3836654")
     implementation("app.revanced:arsclib:1.1.6")
-    implementation(kotlin("reflect"))
 
-    compileOnly("com.google.android:android:4.1.1.4")
-
-    testImplementation(kotlin("test"))
+    implementation("org.jetbrains.kotlin:kotlin-reflect:1.8.10")
+    testImplementation("org.jetbrains.kotlin:kotlin-test:1.8.10")
 }
 
 tasks {
