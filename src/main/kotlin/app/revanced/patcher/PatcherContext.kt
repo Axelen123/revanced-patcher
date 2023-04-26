@@ -10,7 +10,7 @@ import java.io.File
 data class PatcherContext(
     val options: PatcherOptions,
 ) {
-    val packageMetadata = Apk.PackageMetadata()
+    val packageMetadata = options.apkBundle.base.packageMetadata
     internal val patches = mutableListOf<PatchClass>()
     internal val integrations = Integrations(this)
     internal val bytecodeContext = BytecodeContext(options)
