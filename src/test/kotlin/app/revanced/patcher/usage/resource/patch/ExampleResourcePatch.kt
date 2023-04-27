@@ -17,7 +17,7 @@ import org.w3c.dom.Element
 @Version("0.0.1")
 class ExampleResourcePatch : ResourcePatch {
     override fun execute(context: ResourceContext): PatchResult {
-        context.openEditor("AndroidManifest.xml").use { editor ->
+        context.apkBundle.base.resources.openEditor("AndroidManifest.xml").use { editor ->
             val element = editor // regular DomFileEditor
                 .file
                 .getElementsByTagName("application")
