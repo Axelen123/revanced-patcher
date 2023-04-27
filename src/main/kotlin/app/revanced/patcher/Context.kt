@@ -48,7 +48,7 @@ class BytecodeContext internal constructor(options: PatcherOptions) : Context {
      * @param name The name of the resource.
      * @return The id of the resource.
      */
-    fun resourceIdOf(type: String, name: String) = resources.resolve(type, name).toLong()
+    fun resourceIdOf(type: String, name: String) = resources.resolve(type, name).toLong() // For reviewers: is there perhaps a better way to get resource ids for fingerprints?
 }
 
 /**
