@@ -43,9 +43,16 @@ sealed class Apk private constructor(internal val module: ApkModule) {
     companion object {
         const val manifest = "AndroidManifest.xml"
 
-        fun new(path: File): Apk {
-            val module = ApkModule.loadApkFile(path)
-            return if (module.isBaseModule) Base(module) else Split(module)
+        private fun isFeatureModule(apkModule: ApkModule) = apkModule.androidManifestBlock.manifestElement.let {
+            it.searchAttributeByName("isFeatureSplit")?.valueAsBoolean == true || it.searchAttributeByName("configForSplit") != null
+        }
+
+        fun new(path: File) = ApkModule.loadApkFile(path).let { module ->
+            when {
+                module.isBaseModule -> Base(module)
+                isFeatureModule(module) -> FeatureModule(module)
+                else -> Split(module)
+            }
         }
     }
 
@@ -272,7 +279,9 @@ sealed class Apk private constructor(internal val module: ApkModule) {
      * @param packageVersion The package version of the [Apk] file.
      */
     data class PackageMetadata(val packageName: String, val packageVersion: String) {
-        internal constructor(manifestBlock: AndroidManifestBlock): this(manifestBlock.packageName ?: "unnamed split apk file", manifestBlock.versionName ?: "0.0.0")
+        internal constructor(manifestBlock: AndroidManifestBlock) : this(
+            manifestBlock.packageName ?: "unnamed split apk file", manifestBlock.versionName ?: "0.0.0"
+        )
     }
 
 
@@ -339,6 +348,8 @@ sealed class Apk private constructor(internal val module: ApkModule) {
         }
     }
 
+    class FeatureModule(module: ApkModule) : Apk(module)
+
     /**
      * An exception thrown in [h].
      *
@@ -362,7 +373,8 @@ sealed class Apk private constructor(internal val module: ApkModule) {
          */
         class Encode(message: String, throwable: Throwable? = null) : ApkException(message, throwable)
 
-        class ReferenceError(ref: String, throwable: Throwable? = null) : ApkException("Failed to resolve: $ref", throwable) {
+        class ReferenceError(ref: String, throwable: Throwable? = null) :
+            ApkException("Failed to resolve: $ref", throwable) {
             constructor(type: String, name: String, throwable: Throwable? = null) : this("@$type/$name", throwable)
         }
 

@@ -24,17 +24,15 @@ class ApkBundle(
             var base: Apk.Base? = null
             var splits = mutableListOf<Apk.Split>()
             files.forEach {
-                val apk = Apk.new(it)
-                when (apk) {
+                when (val apk = Apk.new(it)) {
                     is Apk.Base -> {
                         if (base != null) {
                             throw IllegalArgumentException("Cannot have more than one base apk")
                         }
                         base = apk
                     }
-                    is Apk.Split -> {
-                        splits.add(apk)
-                    }
+                    is Apk.Split -> splits.add(apk)
+                    else -> {}
                 }
             }
             val split = if (splits.size > 0) Split(splits) else null
