@@ -52,13 +52,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
     /**
      * The metadata of the [Apk].
      */
-    val packageMetadata = PackageMetadata().also {
-        val manifest = module.androidManifestBlock
-        if (manifest.versionName != null) {
-            it.packageName = manifest.packageName
-            it.packageVersion = manifest.versionName
-        }
-    }
+    val packageMetadata = PackageMetadata(module.androidManifestBlock)
 
     private val openFiles = mutableSetOf<String>()
 
@@ -273,19 +267,12 @@ sealed class Apk private constructor(internal val module: ApkModule) {
 
     /**
      * Metadata about an [Apk] file.
+     *
+     * @param packageName The package name of the [Apk] file.
+     * @param packageVersion The package version of the [Apk] file.
      */
-    class PackageMetadata {
-        /**
-         * The package name of the [Apk] file.
-         */
-        var packageName: String = "unnamed split apk file"
-            internal set
-
-        /**
-         * The package version of the [Apk] file.
-         */
-        var packageVersion: String = "0.0.0"
-            internal set
+    data class PackageMetadata(val packageName: String, val packageVersion: String) {
+        internal constructor(manifestBlock: AndroidManifestBlock): this(manifestBlock.packageName ?: "unnamed split apk file", manifestBlock.versionName ?: "0.0.0")
     }
 
 
