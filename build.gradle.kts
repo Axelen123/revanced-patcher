@@ -1,6 +1,5 @@
 plugins {
     kotlin("jvm") version "1.8.10"
-    java
     `maven-publish`
 }
 
@@ -31,6 +30,8 @@ dependencies {
 
     implementation("org.jetbrains.kotlin:kotlin-reflect:1.8.10")
     testImplementation("org.jetbrains.kotlin:kotlin-test:1.8.10")
+
+    compileOnly("com.google.android:android:4.1.1.4")
 }
 
 tasks {
