@@ -43,14 +43,14 @@ sealed class Apk private constructor(internal val module: ApkModule) {
     companion object {
         const val manifest = "AndroidManifest.xml"
 
-        private fun isFeatureModule(apkModule: ApkModule) = apkModule.androidManifestBlock.manifestElement.let {
+        private fun ApkModule.isFeatureModule() = androidManifestBlock.manifestElement.let {
             it.searchAttributeByName("isFeatureSplit")?.valueAsBoolean == true || it.searchAttributeByName("configForSplit") != null
         }
 
         fun new(path: File) = ApkModule.loadApkFile(path).let { module ->
             when {
                 module.isBaseModule -> Base(module)
-                isFeatureModule(module) -> FeatureModule(module)
+                module.isFeatureModule() -> FeatureModule(module)
                 else -> Split(module)
             }
         }
