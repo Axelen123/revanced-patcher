@@ -15,7 +15,7 @@ import java.io.File
  * @param options The options for the patcher.
  */
 class Patcher(private val options: PatcherOptions) {
-    val context = PatcherContext(options)
+    private val context = PatcherContext(options)
     private val logger = options.logger
     private var mergeIntegrations = false
 
