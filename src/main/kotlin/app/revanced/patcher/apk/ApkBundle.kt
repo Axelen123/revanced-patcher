@@ -2,6 +2,7 @@ package app.revanced.patcher.apk
 
 import app.revanced.patcher.Patcher
 import app.revanced.patcher.PatcherOptions
+import com.reandroid.apk.ApkModule
 import com.reandroid.apk.ResourceIds
 import com.reandroid.apk.xmlencoder.EncodeMaterials
 import com.reandroid.arsc.util.FrameworkTable
@@ -11,33 +12,37 @@ import java.io.File
 /**
  * An [Apk] file of type [Apk.Split].
  *
- * @param base The apk file of type [Apk.Base].
- * @param split The [Apk.Split] files.
+ * @param files A list of apk files to load.
  */
-class ApkBundle(
-    val base: Apk.Base,
-    val split: Split? = null
-) {
+class ApkBundle(files: List<File>) {
 
-    companion object {
-        fun new(files: List<File>): ApkBundle {
-            var base: Apk.Base? = null
-            var splits = mutableListOf<Apk.Split>()
-            files.forEach {
-                when (val apk = Apk.new(it)) {
-                    is Apk.Base -> {
-                        if (base != null) {
-                            throw IllegalArgumentException("Cannot have more than one base apk")
-                        }
-                        base = apk
+    val base: Apk.Base
+    val split: Split?
+
+    private fun ApkModule.isFeatureModule() = androidManifestBlock.manifestElement.let {
+        it.searchAttributeByName("isFeatureSplit")?.valueAsBoolean == true || it.searchAttributeByName("configForSplit") != null
+    }
+
+    init {
+        var baseApk: Apk.Base? = null
+        val splits = mutableListOf<Apk.Split>()
+
+        files.forEach {
+            val module = ApkModule.loadApkFile(it)
+            when {
+                module.isBaseModule -> {
+                    if (baseApk != null) {
+                        throw IllegalArgumentException("Cannot have more than one base apk")
                     }
-                    is Apk.Split -> splits.add(apk)
-                    else -> {}
+                    baseApk = Apk.Base(module)
                 }
+
+                !module.isFeatureModule() -> splits.add(Apk.Split(module))
             }
-            val split = if (splits.size > 0) Split(splits) else null
-            return ApkBundle(base ?: throw IllegalArgumentException("Base Apk not found"), split)
         }
+
+        split = splits.takeIf { it.size > 0 }?.let { Split(it) }
+        base = baseApk ?: throw IllegalArgumentException("Base apk not found")
     }
 
     val all = sequence {
@@ -57,7 +62,7 @@ class ApkBundle(
         var exception: Apk.ApkException? = null
         try {
             it.finalize(options)
-        } catch (e:Apk.ApkException) {
+        } catch (e: Apk.ApkException) {
             exception = e
         }
 
@@ -78,7 +83,8 @@ class ApkBundle(
          * @param name The name of the resource.
          * @return The id of the resource.
          */
-        fun resolve(type: String, name: String) = resTable.getResourceId(type, name) ?: throw Apk.ApkException.ReferenceError(type, name)
+        fun resolve(type: String, name: String) =
+            resTable.getResourceId(type, name) ?: throw Apk.ApkException.ReferenceError(type, name)
 
         init {
             val resourceIds = ResourceIds()

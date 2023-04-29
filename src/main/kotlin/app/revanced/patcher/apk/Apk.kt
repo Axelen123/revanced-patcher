@@ -42,18 +42,6 @@ import java.util.zip.ZipEntry
 sealed class Apk private constructor(internal val module: ApkModule) {
     companion object {
         const val manifest = "AndroidManifest.xml"
-
-        private fun ApkModule.isFeatureModule() = androidManifestBlock.manifestElement.let {
-            it.searchAttributeByName("isFeatureSplit")?.valueAsBoolean == true || it.searchAttributeByName("configForSplit") != null
-        }
-
-        fun new(path: File) = ApkModule.loadApkFile(path).let { module ->
-            when {
-                module.isBaseModule -> Base(module)
-                module.isFeatureModule() -> FeatureModule(module)
-                else -> Split(module)
-            }
-        }
     }
 
     /**
@@ -347,8 +335,6 @@ sealed class Apk private constructor(internal val module: ApkModule) {
             bytecodeData.writeDexFiles()
         }
     }
-
-    class FeatureModule(module: ApkModule) : Apk(module)
 
     /**
      * An exception thrown in [h].
