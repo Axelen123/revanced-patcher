@@ -29,8 +29,6 @@ class BytecodeContext internal constructor(options: PatcherOptions) : Context {
      */
     val classes = options.apkBundle.base.bytecodeData.classes
 
-    private val resources = options.apkBundle.resources
-
     /**
      * Create a [MethodWalker] instance for the current [BytecodeContext].
      *
@@ -40,15 +38,6 @@ class BytecodeContext internal constructor(options: PatcherOptions) : Context {
     fun toMethodWalker(startMethod: Method): MethodWalker {
         return MethodWalker(this, startMethod)
     }
-
-    /**
-     * Resolve a resource id for the specified resource.
-     *
-     * @param type The type of the resource.
-     * @param name The name of the resource.
-     * @return The id of the resource.
-     */
-    fun resourceIdOf(type: String, name: String) = resources.resolve(type, name).toLong() // For reviewers: is there perhaps a better way to get resource ids for fingerprints?
 }
 
 /**
