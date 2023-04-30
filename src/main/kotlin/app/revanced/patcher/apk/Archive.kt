@@ -9,7 +9,7 @@ import com.reandroid.xml.XMLDocument
 import com.reandroid.xml.XMLException
 import java.io.IOException
 
-internal data class FileHandle(val virtualPath: String, val archivePath: String, val callback: (() -> Unit)? = null)
+internal data class FileHandle(val virtualPath: String, val archivePath: String, val close: () -> Unit)
 
 private fun isResXml(inputSource: InputSource) = inputSource.openStream().use { ResXmlDocument.isResXmlBlock(it) }
 

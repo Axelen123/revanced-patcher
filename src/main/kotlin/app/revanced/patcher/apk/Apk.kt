@@ -143,7 +143,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
         private fun getHandle(resPath: String): FileHandle {
             if (resPath.startsWith("res/values")) throw ApkException.Decode("Decoding the resource table as a file is not supported")
 
-            var callback: (() -> Unit)? = null
+            var callback = {}
             var archivePath = resPath
 
             if (tableBlock != null && resPath.startsWith("res/") && resPath.count { it == '/' } == 2) {

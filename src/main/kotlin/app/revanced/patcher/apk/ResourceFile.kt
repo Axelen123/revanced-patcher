@@ -51,7 +51,7 @@ class ResourceFile private constructor(
                 }
             ) else archive.writeRaw(handle.archivePath, contents)
         }
-        handle.callback?.invoke()
+        handle.close()
         archive.unlock(handle)
     }
 
