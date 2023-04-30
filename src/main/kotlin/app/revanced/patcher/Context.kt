@@ -75,8 +75,6 @@ class DomFileEditor internal constructor(
     private val outputStream: Lazy<OutputStream>? = null,
     private val onClose: (() -> Unit)? = null,
 ) : Closeable {
-    // Path to the xml file to unlock the resource when closing the editor.
-    private var filePath: String? = null
     private var closed: Boolean = false
 
     /**
@@ -85,18 +83,13 @@ class DomFileEditor internal constructor(
     val file: Document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(inputStream)
         .also(Document::normalize)
 
-
     // Lazily open an output stream.
     // This is required because when constructing a DomFileEditor the output stream is created along with the input stream, which is not allowed.
     // The workaround is to lazily create the output stream. This way it would be used after the input stream is closed, which happens in the constructor.
     internal constructor(file: ResourceFile) : this(
         file.inputStream(),
         lazy { file.outputStream() },
-        { file.close() }) {
-        // Increase the lock.
-        locks.merge(file.toString(), 1, Integer::sum)
-        filePath = file.toString()
-    }
+        { file.close() })
 
     /**
      * Closes the editor. Write backs and decreases the lock count.
@@ -108,38 +101,18 @@ class DomFileEditor internal constructor(
 
         inputStream.close()
 
-        // FOR REVIEWERS: I am not entirely sure if the locking code is obsolete now. Where was it relied upon in the patches?
-
         // If the output stream is not null, do not close it.
         outputStream?.let {
-            // Prevent writing to same file, if it is being locked
-            // isLocked will be false if the editor was created through a stream.
-            val isLocked = filePath?.let { path ->
-                val isLocked = locks[path]!! > 1
-                // Decrease the lock count if the editor was opened for a file.
-                locks.merge(path, -1, Integer::sum)
-                isLocked
-            } ?: false
-
-            // If unlocked, write back to the file.
-            if (!isLocked) {
-                it.value.use { stream ->
-                    val result = StreamResult(stream)
-                    TransformerFactory.newInstance().newTransformer().transform(DOMSource(file), result)
-                }
-
-                it.value.close()
-                onClose?.invoke()
-                return
+            // Write back to the file.
+            it.value.use { stream ->
+                val result = StreamResult(stream)
+                TransformerFactory.newInstance().newTransformer().transform(DOMSource(file), result)
             }
+
+            it.value.close()
         }
 
         onClose?.invoke()
         closed = true
-    }
-
-    private companion object {
-        // Map of concurrent open files.
-        val locks = mutableMapOf<String, Int>()
     }
 }
