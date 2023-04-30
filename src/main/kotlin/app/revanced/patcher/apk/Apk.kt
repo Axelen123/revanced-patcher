@@ -6,10 +6,9 @@ import app.revanced.patcher.DomFileEditor
 import app.revanced.patcher.Patcher
 import app.revanced.patcher.PatcherOptions
 import app.revanced.patcher.arsc.*
-import app.revanced.patcher.arsc.ResourceFileImpl
-import app.revanced.patcher.arsc.LazyXMLInputSource
-import app.revanced.patcher.arsc.scanIdRegistrations
 import app.revanced.patcher.util.ProxyBackedClassList
+import app.revanced.patcher.util.xml.LazyXMLInputSource
+import app.revanced.patcher.util.xml.scanIdRegistrations
 import com.reandroid.apk.ApkModule
 import com.reandroid.apk.xmlencoder.EncodeException
 import com.reandroid.apk.xmlencoder.EncodeMaterials
@@ -49,18 +48,8 @@ sealed class Apk private constructor(internal val module: ApkModule) {
      */
     val packageMetadata = PackageMetadata(module.androidManifestBlock)
 
-    private val openFiles = mutableSetOf<String>()
+    internal val archive = Archive(module)
 
-    internal fun lockFile(path: String) {
-        if (openFiles.contains(path)) {
-            throw ApkException.Decode("Path \"$path\" is locked. If you are a patch developer, make sure you always close files.")
-        }
-        openFiles.add(path)
-    }
-
-    internal fun unlockFile(path: String) {
-        openFiles.remove(path)
-    }
 
     /**
      * Refresh updated resources for an [Apk].
@@ -68,7 +57,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
      * @param options The [PatcherOptions] of the [Patcher].
      */
     internal open fun finalize(options: PatcherOptions) {
-        openFiles.forEach { options.logger.warn("File $it was never closed! File modifications will not be applied if you do not close them.") }
+        archive.openFiles.forEach { options.logger.warn("File $it was never closed! File modifications will not be applied if you do not close them.") }
 
         resources.useMaterials {
             module.apkArchive.listInputSources().forEach {
@@ -151,7 +140,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
                 tableBlock?.resolveReference(id)?.singleOrNull { it.resConfig == config }
             }
 
-        private fun getBackend(resPath: String): ResourceFileImpl {
+        private fun getHandle(resPath: String): FileHandle {
             if (resPath.startsWith("res/values")) throw ApkException.Decode("Decoding the resource table as a file is not supported")
 
             var callback: (() -> Unit)? = null
@@ -176,12 +165,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
                 }
             }
 
-            return if (resPath.endsWith(".xml")) ResourceFileImpl.XML(
-                archivePath,
-                this,
-                module,
-                callback
-            ) else ResourceFileImpl.Raw(archivePath, module.apkArchive, callback)
+            return FileHandle(resPath, archivePath, callback)
         }
 
         fun set(type: String, name: String, value: Resource, configuration: String? = null) =
@@ -199,7 +183,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
          * Open a [app.revanced.patcher.apk.ResourceFile]
          */
         fun openFile(path: String) = ResourceFile(
-            path, this@Apk, resources.getBackend(path)
+            resources.getHandle(path), archive, this
         )
 
         fun openEditor(path: String) = DomFileEditor(openFile(path))
@@ -337,7 +321,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
     }
 
     /**
-     * An exception thrown in [h].
+     * An exception thrown when working with [Apk]s.
      *
      * @param message The exception message.
      * @param throwable The corresponding [Throwable].

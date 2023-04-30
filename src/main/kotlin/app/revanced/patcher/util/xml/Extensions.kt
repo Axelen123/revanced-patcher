@@ -1,4 +1,4 @@
-package app.revanced.patcher.arsc
+package app.revanced.patcher.util.xml
 
 import com.reandroid.xml.XMLDocument
 
