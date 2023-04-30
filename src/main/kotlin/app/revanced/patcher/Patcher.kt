@@ -171,7 +171,6 @@ class Patcher(private val options: PatcherOptions) {
                     when (it) {
                         is Apk.Base -> PatcherResult.Patch.Base(it)
                         is Apk.Split -> PatcherResult.Patch.Split(it)
-                        else -> TODO()
                     }
                 }
 
