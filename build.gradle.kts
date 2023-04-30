@@ -1,6 +1,5 @@
 plugins {
     kotlin("jvm") version "1.8.10"
-    java
     `maven-publish`
 }
 
@@ -30,8 +29,8 @@ dependencies {
     // ARSCLib fork with a custom zip implementation to fix performance issues on Android devices
     implementation("app.revanced:arsclib:1.1.6")
 
-    implementation("org.jetbrains.kotlin:kotlin-reflect:1.8.10")
-    testImplementation("org.jetbrains.kotlin:kotlin-test:1.8.10")
+    implementation("org.jetbrains.kotlin:kotlin-reflect:1.8.20-RC")
+    testImplementation("org.jetbrains.kotlin:kotlin-test:1.8.20-RC")
 
     compileOnly("com.google.android:android:4.1.1.4")
 }
