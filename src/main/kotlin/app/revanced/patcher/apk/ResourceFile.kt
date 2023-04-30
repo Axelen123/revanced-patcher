@@ -60,8 +60,12 @@ class ResourceFile private constructor(
         contents = string.toByteArray()
     }
 
+    companion object {
+        const val DEFAULT_BUFFER_SIZE = 4096
+    }
+
     fun inputStream(): InputStream = ByteArrayInputStream(contents)
-    fun outputStream(bufferSize: Int = 8 * 1024): OutputStream =
+    fun outputStream(bufferSize: Int = DEFAULT_BUFFER_SIZE): OutputStream =
         object : ByteArrayOutputStream(bufferSize) {
             override fun close() {
                 this@ResourceFile.contents = if (buf.size > count) buf.copyOf(count) else buf
