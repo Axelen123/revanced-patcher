@@ -9,6 +9,11 @@ import com.reandroid.xml.XMLDocument
 import com.reandroid.xml.XMLException
 import java.io.IOException
 
+/**
+ * @param virtualPath The resource file path (res/drawable-hdpi/icon.png)
+ * @param archivePath The actual file path in the archive (res/4a.png)
+ * @param close An action to perform when the file associated with this handle is closed
+ */
 internal data class FileHandle(val virtualPath: String, val archivePath: String, val close: () -> Unit)
 
 private fun isResXml(inputSource: InputSource) = inputSource.openStream().use { ResXmlDocument.isResXmlBlock(it) }

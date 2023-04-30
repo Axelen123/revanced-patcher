@@ -8,6 +8,9 @@ import java.io.Closeable
 import java.io.InputStream
 import java.io.OutputStream
 
+/**
+ * A resource file inside an [Apk].
+ */
 class ResourceFile private constructor(
     private val handle: FileHandle,
     private val archive: Archive,
@@ -18,6 +21,11 @@ class ResourceFile private constructor(
     private var changed = false
     private val xml = readResult?.xml ?: handle.virtualPath.endsWith(".xml")
 
+    /**
+     * @param handle The [FileHandle] associated with this file
+     * @param archive The [Archive] that the file resides in
+     * @param resources Resources used to resolve paths and encode XML
+     */
     internal constructor(handle: FileHandle, archive: Archive, resources: Apk.Resources) : this(
         handle,
         archive,
