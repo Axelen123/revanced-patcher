@@ -186,7 +186,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
             resources.getHandle(path), archive, this
         )
 
-        fun openEditor(path: String) = DomFileEditor(openFile(path))
+        fun editXmlFile(path: String) = DomFileEditor(openFile(path))
     }
 
     val resources = Resources(module.tableBlock)

@@ -57,7 +57,7 @@ class ResourceContext internal constructor(options: PatcherOptions) : Context {
      * @param inputStream The input stream to read the DOM file from.
      * @return A [DomFileEditor] instance.
      */
-    fun openEditor(inputStream: InputStream) = DomFileEditor(inputStream)
+    fun xmlEditor(inputStream: InputStream) = DomFileEditor(inputStream)
 }
 
 /**
