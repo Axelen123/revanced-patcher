@@ -26,7 +26,8 @@ dependencies {
     implementation("xpp3:xpp3:1.1.4c")
     implementation("app.revanced:smali:2.5.3-a3836654")
     implementation("app.revanced:multidexlib2:2.5.3-a3836654")
-    // ARSCLib fork with a custom zip implementation to fix performance issues on Android devices
+    // ARSCLib fork with a custom zip implementation to fix performance issues on Android devices.
+    // The fork will no longer be needed after archive2 is finished upstream.
     implementation("app.revanced:arsclib:1.1.6")
 
     implementation("org.jetbrains.kotlin:kotlin-reflect:1.8.20-RC")
