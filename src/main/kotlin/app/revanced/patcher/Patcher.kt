@@ -95,16 +95,11 @@ class Patcher(private val options: PatcherOptions) {
                 val dependency = dependencyClass.java
 
                 executePatch(dependency, executedPatches).also {
-                    if (it is PatchResult.Success) return@forEach
-                }.let {
-                    with(it as PatchResult.Error) {
-                        val errorMessage = it.cause?.stackTraceToString() ?: it.message
-                        return PatchResult.Error(
-                            "'$patchName' depends on '${dependency.patchName}' " +
-                                    "but the following exception was raised: $errorMessage",
-                            it
-                        )
-                    }
+                    if (it is PatchResult.Error) return PatchResult.Error(
+                        "'$patchName' depends on '${dependency.patchName}' " +
+                                "but the following exception was raised: ${it.cause?.stackTraceToString() ?: it.message}",
+                        it
+                    )
                 }
             }
 
