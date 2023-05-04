@@ -15,10 +15,10 @@ import javax.xml.transform.dom.DOMSource
 import javax.xml.transform.stream.StreamResult
 
 /**
- * A common interface to constrain [Context] to [BytecodeContext] and [ResourceContext].
+ * A common class to constrain [Context] to [BytecodeContext] and [ResourceContext].
  * @param apkBundle the [ApkBundle] for this context.
  */
-abstract class Context internal constructor(val apkBundle: ApkBundle)
+sealed class Context(val apkBundle: ApkBundle)
 
 /**
  * A context for the bytecode of an [Apk.Base] file.
