@@ -11,8 +11,8 @@ data class PatcherContext(
 ) {
     internal val patches = mutableListOf<PatchClass>()
     internal val integrations = Integrations(this)
-    internal val bytecodeContext = BytecodeContext(options)
-    internal val resourceContext = ResourceContext(options)
+    internal val bytecodeContext = BytecodeContext(options.apkBundle)
+    internal val resourceContext = ResourceContext(options.apkBundle)
 
     internal class Integrations(val context: PatcherContext) {
         private val integrations: MutableList<File> = mutableListOf()
