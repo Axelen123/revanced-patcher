@@ -71,7 +71,7 @@ class ResourceContext internal constructor(apkBundle: ApkBundle) : Context(apkBu
 class DomFileEditor internal constructor(
     private val inputStream: InputStream,
     private val outputStream: Lazy<OutputStream>? = null,
-    private val onClose: (() -> Unit)? = null,
+    private val onClose: () -> Unit = { },
 ) : Closeable {
     private var closed: Boolean = false
 
