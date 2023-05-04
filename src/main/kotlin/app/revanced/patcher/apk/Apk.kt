@@ -8,7 +8,7 @@ import app.revanced.patcher.PatcherOptions
 import app.revanced.patcher.arsc.*
 import app.revanced.patcher.util.ProxyBackedClassList
 import app.revanced.patcher.util.xml.LazyXMLInputSource
-import app.revanced.patcher.util.xml.scanIdRegistrations
+import app.revanced.patcher.util.xml.registerIds
 import com.reandroid.apk.ApkModule
 import com.reandroid.apk.xmlencoder.EncodeException
 import com.reandroid.apk.xmlencoder.EncodeMaterials
@@ -64,13 +64,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
                 val pkg = resources.packageBlock
                 if (it is LazyXMLInputSource) {
                     if (resources.hasResourceTable) {
-                        // Scan for @+id registrations.
-                        it.document.scanIdRegistrations().forEach { attr ->
-                            val name = attr.value.split('/').last()
-                            options.logger.trace("Registering ID: $name")
-                            pkg!!.getOrCreate("", "id", name).resValue.valueAsBoolean = false
-                            attr.value = "@id/$name"
-                        }
+                        it.document.registerIds(pkg!!)
                     }
 
                     try {
