@@ -47,11 +47,9 @@ data class PatcherContext(
 
                         logger.trace("Type $type exists. Adding missing methods and fields.")
 
-                        get(existingClassIndex).apply {
-                            merge(classDef, context.bytecodeContext, logger).let { mergedClass ->
-                                if (mergedClass !== this) // referential equality check
-                                    set(existingClassIndex, mergedClass)
-                            }
+                        val mergedClass = merge(classDef, context.bytecodeContext, logger)
+                        if (mergedClass !== get(existingClassIndex)) { // referential equality check
+                            set(existingClassIndex, mergedClass)
                         }
 
                     }
