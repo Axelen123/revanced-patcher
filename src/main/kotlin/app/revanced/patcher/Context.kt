@@ -1,6 +1,7 @@
 package app.revanced.patcher
 
 import app.revanced.patcher.apk.Apk
+import app.revanced.patcher.apk.ApkBundle
 import app.revanced.patcher.apk.ResourceFile
 import app.revanced.patcher.util.method.MethodWalker
 import org.jf.dexlib2.iface.Method
@@ -15,19 +16,20 @@ import javax.xml.transform.stream.StreamResult
 
 /**
  * A common interface to constrain [Context] to [BytecodeContext] and [ResourceContext].
+ * @param apkBundle the [ApkBundle] for this context.
  */
-sealed interface Context
+abstract class Context internal constructor(val apkBundle: ApkBundle)
 
 /**
  * A context for the bytecode of an [Apk.Base] file.
  *
- * @param options The [PatcherOptions] of the [Patcher].
+ * @param apkBundle The [ApkBundle] for this context.
  */
-class BytecodeContext internal constructor(options: PatcherOptions) : Context {
+class BytecodeContext internal constructor(apkBundle: ApkBundle) : Context(apkBundle) {
     /**
      * The list of classes.
      */
-    val classes = options.apkBundle.base.bytecodeData.classes
+    val classes = apkBundle.base.bytecodeData.classes
 
     /**
      * Create a [MethodWalker] instance for the current [BytecodeContext].
@@ -43,13 +45,9 @@ class BytecodeContext internal constructor(options: PatcherOptions) : Context {
 /**
  * A context for [Apk] file resources.
  *
- * @param options The [PatcherOptions] of the [Patcher].
+ * @param apkBundle the [ApkBundle] for this context.
  */
-class ResourceContext internal constructor(options: PatcherOptions) : Context {
-    /**
-     * The current [ApkBundle].
-     */
-    val apkBundle = options.apkBundle
+class ResourceContext internal constructor(apkBundle: ApkBundle) : Context(apkBundle) {
 
     /**
      * Open an [DomFileEditor] for a given DOM file.
