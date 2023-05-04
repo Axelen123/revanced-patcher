@@ -33,7 +33,7 @@ import java.util.zip.ZipEntry
 
 
 /**
- * The [Apk] file that is to be patched.
+ * An [Apk] file.
  *
  * @param path The path to the apk file.
  * @param name The name of this apk.
