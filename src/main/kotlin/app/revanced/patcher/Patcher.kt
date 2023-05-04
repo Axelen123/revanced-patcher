@@ -64,7 +64,7 @@ class Patcher(private val options: PatcherOptions) {
      * Execute the patcher.
      *
      * @param stopOnError If true, the patches will stop on the first error.
-     * @return A pair of the name of the [Patch] and its [PatchResult].
+     * @return A pair of the name of the [Patch] and a [PatchException] if it failed.
      */
     fun execute(stopOnError: Boolean = false) = sequence {
         /**
@@ -72,33 +72,34 @@ class Patcher(private val options: PatcherOptions) {
          *
          * @param patchClass The [Patch] to execute.
          * @param executedPatches A map of [Patch]es paired to a boolean indicating their success, to prevent infinite recursion.
-         * @return The result of executing the [Patch].
          */
         fun executePatch(
             patchClass: PatchClass,
             executedPatches: HashMap<String, ExecutedPatch>
-        ): PatchResult {
+        ) {
             val patchName = patchClass.patchName
 
             // If the patch has already executed silently skip it.
             if (executedPatches.contains(patchName)) {
                 if (!executedPatches[patchName]!!.success)
-                    return PatchResult.Error("'$patchName' did not succeed previously")
+                    throw PatchException("'$patchName' did not succeed previously")
 
                 logger.trace("Skipping '$patchName' because it has already been executed")
 
-                return PatchResult.Success
+                return
             }
 
             // Recursively execute all dependency patches.
             patchClass.dependencies?.forEach { dependencyClass ->
                 val dependency = dependencyClass.java
 
-                executePatch(dependency, executedPatches).also {
-                    if (it is PatchResult.Error) return PatchResult.Error(
+                try {
+                    executePatch(dependency, executedPatches)
+                } catch (throwable: Throwable) {
+                    throw PatchException(
                         "'$patchName' depends on '${dependency.patchName}' " +
-                                "but the following exception was raised: ${it.cause?.stackTraceToString() ?: it.message}",
-                        it
+                                "but the following exception was raised: ${throwable.cause?.stackTraceToString() ?: throwable.message}",
+                        throwable
                     )
                 }
             }
@@ -118,14 +119,17 @@ class Patcher(private val options: PatcherOptions) {
 
             logger.trace("Executing '$patchName' of type: ${if (isResourcePatch) "resource" else "bytecode"}")
 
-            return try {
+            var success = false
+            try {
                 patchInstance.execute(patchContext)
-            } catch (patchException: PatchResult.Error) {
-                patchException
-            } catch (exception: Exception) {
-                PatchResult.Error("Unhandled patch exception: ${exception.message}", exception)
-            }.also {
-                executedPatches[patchName] = ExecutedPatch(patchInstance, it is PatchResult.Success)
+
+                success = true
+            } catch (patchException: PatchException) {
+                throw patchException
+            } catch (throwable: Throwable) {
+                throw PatchException("Unhandled patch exception: ${throwable.message}", throwable)
+            } finally {
+                executedPatches[patchName] = ExecutedPatch(patchInstance, success)
             }
         }
         if (mergeIntegrations) context.integrations.merge(logger, dexFileNamer)
@@ -135,10 +139,15 @@ class Patcher(private val options: PatcherOptions) {
         HashMap<String, ExecutedPatch>().apply {
             try {
                 context.patches.forEach { patch ->
-                    val result = executePatch(patch, this)
+                    var exception: PatchException? = null
+                    try {
+                        executePatch(patch, this)
+                    } catch (patchException: PatchException) {
+                        exception = patchException
+                    }
 
-                    yield(patch.patchName to result)
-                    if (stopOnError && result is PatchResult.Error) return@sequence
+                    yield(patch.patchName to exception)
+                    if (stopOnError && exception != null) return@sequence
                 }
             } finally {
                 values.reversed().forEach { (patch, _) ->
