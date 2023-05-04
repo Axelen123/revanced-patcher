@@ -20,9 +20,6 @@ class Patcher(private val options: PatcherOptions) {
     private var mergeIntegrations = false
 
     companion object {
-        @Suppress("SpellCheckingInspection")
-        internal val dexFileNamer = BasicDexFileNamer()
-
         /**
          * The version of the ReVanced Patcher.
          */
@@ -132,7 +129,7 @@ class Patcher(private val options: PatcherOptions) {
                 executedPatches[patchName] = ExecutedPatch(patchInstance, success)
             }
         }
-        if (mergeIntegrations) context.integrations.merge(logger, dexFileNamer)
+        if (mergeIntegrations) context.integrations.merge(logger)
 
         logger.trace("Executing all patches")
 
