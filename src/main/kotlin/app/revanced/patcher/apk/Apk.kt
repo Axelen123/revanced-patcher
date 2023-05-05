@@ -58,25 +58,22 @@ sealed class Apk private constructor(internal val module: ApkModule) {
 
         resources.useMaterials {
             val apkArchive = module.apkArchive
-            val packageBlock = resources.packageBlock
 
-            apkArchive.listInputSources().forEach {
-                if (it !is LazyXMLInputSource) return@forEach
-                packageBlock?.let { packageBlock ->
-                    it.document.registerIds(packageBlock)
-                }
-
-                try {
-                    it.encode() // Encode the LazyXMLInputSource.
-                } catch (e: EncodeException) {
-                    throw ApkException.Encode("Failed to encode ${it.name}", e)
-                }
+            val manifest = try {
+                apkArchive.getInputSource(manifest).openStream()
+                    .use { stream -> AndroidManifestBlock.load(stream) }
+            } catch (e: EncodeException) {
+                throw ApkException.Encode("Failed to encode manifest", e)
+            }.also {
+                module.setManifest(it)
             }
 
-            // Update package block name
-            packageBlock?.name =
-                apkArchive.getInputSource(manifest).openStream()
-                    .use { stream -> AndroidManifestBlock.load(stream) }.packageName
+            resources.packageBlock?.let { packageBlock ->
+                apkArchive.listInputSources().filterIsInstance<LazyXMLInputSource>().forEach(LazyXMLInputSource::encode)
+
+                // Update package block name
+                packageBlock.name = manifest.packageName
+            }
         }
     }
 
