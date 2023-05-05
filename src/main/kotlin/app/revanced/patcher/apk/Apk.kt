@@ -78,8 +78,6 @@ sealed class Apk private constructor(internal val module: ApkModule) {
     }
 
     inner class Resources(val tableBlock: TableBlock?) {
-        internal val hasResourceTable = module.hasTableBlock()
-
         internal val packageBlock: PackageBlock? =
             tableBlock?.packageArray?.let { array ->
                 if (array.childes.size == 1) array[0] else array.iterator()?.asSequence()
