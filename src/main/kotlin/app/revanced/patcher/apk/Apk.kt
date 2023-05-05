@@ -51,7 +51,6 @@ sealed class Apk private constructor(internal val module: ApkModule) {
 
     internal val archive = Archive(module)
 
-
     /**
      * Refresh updated resources for an [Apk].
      *
