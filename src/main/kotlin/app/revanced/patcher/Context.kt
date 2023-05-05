@@ -110,7 +110,7 @@ class DomFileEditor internal constructor(
             it.value.close()
         }
 
-        onClose?.invoke()
+        onClose()
         closed = true
     }
 }
