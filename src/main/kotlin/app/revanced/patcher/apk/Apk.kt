@@ -35,9 +35,6 @@ import java.util.zip.ZipEntry
 
 /**
  * An [Apk] file.
- *
- * @param path The path to the apk file.
- * @param name The name of this apk.
  */
 sealed class Apk private constructor(internal val module: ApkModule) {
     companion object {
@@ -259,10 +256,9 @@ sealed class Apk private constructor(internal val module: ApkModule) {
     /**
      * An [Apk] of type [Split].
      *
-     * @param path The path to the apk file.
      * @see Apk
      */
-    class Split(module: ApkModule) : Apk(module) {
+    class Split internal constructor(module: ApkModule) : Apk(module) {
         enum class Type {
             LANGUAGE, LIBRARY, ASSET;
         }
@@ -293,10 +289,9 @@ sealed class Apk private constructor(internal val module: ApkModule) {
     /**
      * The base apk file that is to be patched.
      *
-     * @param path The path to the apk file.
      * @see Apk
      */
-    class Base(module: ApkModule) : Apk(module) {
+    class Base internal constructor(module: ApkModule) : Apk(module) {
         /**
          * Data of the [Base] apk file.
          */
