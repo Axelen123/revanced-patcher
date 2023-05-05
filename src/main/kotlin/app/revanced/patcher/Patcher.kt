@@ -25,6 +25,9 @@ class Patcher(private val options: PatcherOptions) {
          */
         @JvmStatic
         val version = VersionReader.read()
+
+        @Suppress("SpellCheckingInspection")
+        internal val dexFileNamer = BasicDexFileNamer()
     }
 
     /**

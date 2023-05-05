@@ -15,11 +15,6 @@ data class PatcherContext(
     internal val bytecodeContext = BytecodeContext(options.apkBundle)
     internal val resourceContext = ResourceContext(options.apkBundle)
 
-    private companion object {
-        @Suppress("SpellCheckingInspection")
-        val dexFileNamer = BasicDexFileNamer()
-    }
-
     internal class Integrations(val context: PatcherContext) {
         private val integrations: MutableList<File> = mutableListOf()
 
@@ -34,7 +29,7 @@ data class PatcherContext(
                 for (integrations in integrations) {
                     logger.info("Merging $integrations")
 
-                    for (classDef in MultiDexIO.readDexFile(true, integrations, dexFileNamer, null, null).classes) {
+                    for (classDef in MultiDexIO.readDexFile(true, integrations, Patcher.dexFileNamer, null, null).classes) {
                         val type = classDef.type
 
                         val existingClassIndex = this.indexOfFirst { it.type == type }
