@@ -257,7 +257,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
     }
 
     /**
-     * The split apk file that is to be patched.
+     * An [Apk] of type [Split].
      *
      * @param path The path to the apk file.
      * @see Apk
