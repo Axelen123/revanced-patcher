@@ -56,22 +56,15 @@ sealed class Apk private constructor(internal val module: ApkModule) {
     internal open fun finalize(options: PatcherOptions) {
         archive.openFiles.forEach { options.logger.warn("File $it was never closed! File modifications will not be applied if you do not close them.") }
 
+        val apkArchive = module.apkArchive
+
         resources.useMaterials {
-            val apkArchive = module.apkArchive
-
-            val manifest = try {
-                apkArchive.getInputSource(manifest).openStream()
-                    .use { stream -> AndroidManifestBlock.load(stream) }
-            } catch (e: EncodeException) {
-                throw ApkException.Encode("Failed to encode manifest", e)
-            }.also {
-                module.setManifest(it)
-            }
-
             apkArchive.listInputSources().filterIsInstance<LazyXMLInputSource>().forEach(LazyXMLInputSource::encode)
-
-            resources.packageBlock?.name = manifest.packageName
         }
+
+        // Update package block name
+        resources.packageBlock?.name = apkArchive.getInputSource(manifest).openStream()
+            .use { stream -> AndroidManifestBlock.load(stream) }.packageName
     }
 
     inner class Resources(val tableBlock: TableBlock?) {
