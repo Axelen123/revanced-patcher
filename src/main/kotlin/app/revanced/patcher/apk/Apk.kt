@@ -25,6 +25,7 @@ import lanchon.multidexlib2.MultiDexContainerBackedDexFile
 import lanchon.multidexlib2.MultiDexIO
 import lanchon.multidexlib2.RawDexIO
 import org.jf.dexlib2.dexbacked.DexBackedDexFile
+import org.jf.dexlib2.iface.DexFile
 import org.jf.dexlib2.iface.MultiDexContainer
 import org.jf.dexlib2.writer.io.MemoryDataStore
 import org.w3c.dom.*
@@ -187,9 +188,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
 
     internal inner class BytecodeData {
         private val dexFile = MultiDexContainerBackedDexFile(object : MultiDexContainer<DexBackedDexFile> {
-            /**
-             * Load all dex files from the [ApkModule] and create an entry for each of them.
-             */
+            // Load all dex files from the apk module and create a dex entry for each of them.
             private val entries = module.listDexFiles().map {
                 BasicDexEntry(
                     this,
@@ -218,7 +217,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
 
             // Create patched dex files.
             mutableMapOf<String, MemoryDataStore>().also {
-                val newDexFile = object : org.jf.dexlib2.iface.DexFile {
+                val newDexFile = object : DexFile {
                     override fun getClasses() = classes.toSet()
                     override fun getOpcodes() = opcodes
                 }
