@@ -57,23 +57,25 @@ sealed class Apk private constructor(internal val module: ApkModule) {
         archive.openFiles.forEach { options.logger.warn("File $it was never closed! File modifications will not be applied if you do not close them.") }
 
         resources.useMaterials {
-            module.apkArchive.listInputSources().forEach {
-                if (it is LazyXMLInputSource) {
-                    resources.packageBlock?.let { packageBlock ->
-                        it.document.registerIds(packageBlock)
-                    }
+            val apkArchive = module.apkArchive
+            val packageBlock = resources.packageBlock
 
-                    try {
-                        it.encode() // Encode the LazyXMLInputSource.
-                    } catch (e: EncodeException) {
-                        throw ApkException.Encode("Failed to encode ${it.name}", e)
-                    }
+            apkArchive.listInputSources().forEach {
+                if (it !is LazyXMLInputSource) return@forEach
+                packageBlock?.let { packageBlock ->
+                    it.document.registerIds(packageBlock)
+                }
+
+                try {
+                    it.encode() // Encode the LazyXMLInputSource.
+                } catch (e: EncodeException) {
+                    throw ApkException.Encode("Failed to encode ${it.name}", e)
                 }
             }
 
             // Update package block name
-            resources.packageBlock?.name =
-                module.apkArchive.getInputSource(manifest).openStream()
+            packageBlock?.name =
+                apkArchive.getInputSource(manifest).openStream()
                     .use { stream -> AndroidManifestBlock.load(stream) }.packageName
         }
     }
