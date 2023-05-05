@@ -68,12 +68,9 @@ sealed class Apk private constructor(internal val module: ApkModule) {
                 module.setManifest(it)
             }
 
-            resources.packageBlock?.let { packageBlock ->
-                apkArchive.listInputSources().filterIsInstance<LazyXMLInputSource>().forEach(LazyXMLInputSource::encode)
+            apkArchive.listInputSources().filterIsInstance<LazyXMLInputSource>().forEach(LazyXMLInputSource::encode)
 
-                // Update package block name
-                packageBlock.name = manifest.packageName
-            }
+            resources.packageBlock?.name = manifest.packageName
         }
     }
 
