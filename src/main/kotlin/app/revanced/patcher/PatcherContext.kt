@@ -3,7 +3,6 @@ package app.revanced.patcher
 import app.revanced.patcher.logging.Logger
 import app.revanced.patcher.patch.PatchClass
 import app.revanced.patcher.util.ClassMerger.merge
-import lanchon.multidexlib2.BasicDexFileNamer
 import lanchon.multidexlib2.MultiDexIO
 import java.io.File
 
@@ -16,9 +15,9 @@ data class PatcherContext(
     internal val resourceContext = ResourceContext(options.apkBundle)
 
     internal class Integrations(val context: PatcherContext) {
-        private val integrations: MutableList<File> = mutableListOf()
+        private val dexContainers = mutableListOf<File>()
 
-        fun add(integrations: List<File>) = this@Integrations.integrations.addAll(integrations)
+        fun add(integrations: List<File>) = dexContainers.addAll(integrations)
 
         /**
          * Merge integrations.
@@ -26,7 +25,7 @@ data class PatcherContext(
          */
         fun merge(logger: Logger) {
             context.bytecodeContext.classes.apply {
-                for (integrations in integrations) {
+                for (integrations in dexContainers) {
                     logger.info("Merging $integrations")
 
                     for (classDef in MultiDexIO.readDexFile(true, integrations, Patcher.dexFileNamer, null, null).classes) {
