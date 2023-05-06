@@ -37,9 +37,7 @@ class BytecodeContext internal constructor(apkBundle: ApkBundle) : Context(apkBu
      * @param startMethod The method to start at.
      * @return A [MethodWalker] instance.
      */
-    fun toMethodWalker(startMethod: Method): MethodWalker {
-        return MethodWalker(this, startMethod)
-    }
+    fun traceMethodCalls(startMethod: Method) = MethodWalker(this, startMethod)
 }
 
 /**
