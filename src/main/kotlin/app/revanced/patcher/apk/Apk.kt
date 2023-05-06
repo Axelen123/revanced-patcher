@@ -8,7 +8,6 @@ import app.revanced.patcher.PatcherOptions
 import app.revanced.patcher.arsc.*
 import app.revanced.patcher.util.ProxyBackedClassList
 import app.revanced.patcher.util.xml.LazyXMLInputSource
-import app.revanced.patcher.util.xml.registerIds
 import com.reandroid.apk.ApkModule
 import com.reandroid.apk.xmlencoder.EncodeException
 import com.reandroid.apk.xmlencoder.EncodeMaterials

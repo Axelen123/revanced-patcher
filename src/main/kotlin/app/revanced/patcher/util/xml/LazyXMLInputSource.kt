@@ -19,7 +19,7 @@ import com.reandroid.xml.source.XMLDocumentSource
  */
 internal class LazyXMLInputSource(
     name: String,
-    private val document: XMLDocument,
+    val document: XMLDocument,
     private val materials: EncodeMaterials
 ) : XMLEncodeSource(materials, XMLDocumentSource(name, document)) {
     private fun XMLElement.registerIds(
