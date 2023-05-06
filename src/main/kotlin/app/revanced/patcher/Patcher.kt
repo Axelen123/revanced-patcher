@@ -158,11 +158,11 @@ class Patcher(private val options: PatcherOptions) {
     }
 
     /**
-     * Save the patched dex file.
+     * Write patched resources and dex files.
      *
      * @return The [PatcherResult] of the [Patcher].
      */
-    fun save(): PatcherResult {
+    fun write(): PatcherResult {
         val patchResults = buildList {
             logger.info("Writing patched resources")
             options.apkBundle.finalize(options).forEach { writeResult ->
