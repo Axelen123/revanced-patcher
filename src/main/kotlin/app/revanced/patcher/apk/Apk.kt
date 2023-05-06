@@ -27,7 +27,6 @@ import org.jf.dexlib2.dexbacked.DexBackedDexFile
 import org.jf.dexlib2.iface.DexFile
 import org.jf.dexlib2.iface.MultiDexContainer
 import org.jf.dexlib2.writer.io.MemoryDataStore
-import org.w3c.dom.*
 import java.io.File
 import java.util.zip.ZipEntry
 
@@ -161,7 +160,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
             resources.getHandle(path), archive, this
         )
 
-        fun editXmlFile(path: String) = DomFileEditor(openFile(path))
+        fun openXmlFile(path: String) = DomFileEditor(openFile(path))
     }
 
     val resources = Resources(module.tableBlock)
