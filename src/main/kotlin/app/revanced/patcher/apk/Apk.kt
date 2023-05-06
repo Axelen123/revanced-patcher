@@ -230,11 +230,9 @@ sealed class Apk private constructor(internal val module: ApkModule) {
 
 
     /**
-     * @param out The [File] to write to.
+     * @param output The [File] to write to.
      */
-    fun save(out: File) {
-        module.writeApk(out)
-    }
+    fun write(output: File) = module.writeApk(output)
 
     /**
      * An [Apk] of type [Split].
