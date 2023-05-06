@@ -53,7 +53,7 @@ class ResourceContext internal constructor(apkBundle: ApkBundle) : Context(apkBu
      * @param inputStream The input stream to read the DOM file from.
      * @return A [DomFileEditor] instance.
      */
-    fun xmlEditor(inputStream: InputStream) = DomFileEditor(inputStream)
+    fun openXmlFile(inputStream: InputStream) = DomFileEditor(inputStream)
 }
 
 /**
