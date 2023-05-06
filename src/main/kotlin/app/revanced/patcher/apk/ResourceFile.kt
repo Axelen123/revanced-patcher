@@ -63,11 +63,6 @@ class ResourceFile private constructor(
         archive.unlock(handle)
     }
 
-    fun readText() = String(contents)
-    fun writeText(string: String) {
-        contents = string.toByteArray()
-    }
-
     companion object {
         const val DEFAULT_BUFFER_SIZE = 4096
     }
