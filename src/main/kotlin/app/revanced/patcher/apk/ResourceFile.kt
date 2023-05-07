@@ -12,7 +12,7 @@ import java.io.OutputStream
  * A resource file inside an [Apk].
  */
 class ResourceFile private constructor(
-    private val handle: FileHandle,
+    internal val handle: FileHandle,
     private val archive: Archive,
     private val resources: Apk.Resources,
     readResult: Archive.ReadResult?
@@ -44,23 +44,23 @@ class ResourceFile private constructor(
     override fun toString() = handle.virtualPath
 
     init {
-        archive.lock(handle)
+        archive.lock(this)
     }
 
     override fun close() {
         if (changed) {
             if (xml) archive.writeXml(
                 resources,
-                handle.archivePath,
+                handle,
                 try {
                     XMLDocument.load(String(contents))
                 } catch (e: XMLException) {
                     throw Apk.ApkException.Encode("Failed to parse XML while writing ${handle.virtualPath}", e)
                 }
-            ) else archive.writeRaw(handle.archivePath, contents)
+            ) else archive.writeRaw(handle, contents)
         }
         handle.close()
-        archive.unlock(handle)
+        archive.unlock(this)
     }
 
     companion object {

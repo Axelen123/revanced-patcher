@@ -52,7 +52,10 @@ sealed class Apk private constructor(internal val module: ApkModule) {
      * @param options The [PatcherOptions] of the [Patcher].
      */
     internal open fun finalize(options: PatcherOptions) {
-        archive.openFiles.forEach { options.logger.warn("File $it was never closed! File modifications will not be applied if you do not close them.") }
+        archive.openFiles().forEach {
+            options.logger.warn("${it.handle.virtualPath} was never closed!")
+            it.close()
+        }
 
         val apkArchive = module.apkArchive
 

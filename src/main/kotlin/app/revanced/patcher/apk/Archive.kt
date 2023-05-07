@@ -23,20 +23,38 @@ internal class Archive(private val module: ApkModule) {
 
     private val archive = module.apkArchive
 
-    internal val openFiles = mutableSetOf<String>()
+    private val lockedFiles = mutableMapOf<String, ResourceFile>()
 
-    internal fun lock(handle: FileHandle) {
-        val path = handle.archivePath
-        if (openFiles.contains(path)) {
-            throw Apk.ApkException.Decode("${handle.virtualPath} is locked. If you are a patch developer, make sure you always close files.")
+    /**
+     * Lock the [ResourceFile], preventing it from being opened again until it is unlocked.
+     */
+    fun lock(file: ResourceFile) {
+        val path = file.handle.archivePath
+        if (lockedFiles.contains(path)) {
+            throw Apk.ApkException.Decode("${file.handle.virtualPath} is locked. If you are a patch developer, make sure you always close files.")
         }
-        openFiles.add(path)
+        lockedFiles[path] = file
     }
 
-    internal fun unlock(handle: FileHandle) {
-        openFiles.remove(handle.archivePath)
+    /**
+     * Unlock the [ResourceFile], allowing patches to open it again.
+     */
+    fun unlock(file: ResourceFile) {
+        lockedFiles.remove(file.handle.archivePath)
     }
 
+    /**
+     * @return A list of all currently open files
+     */
+    fun openFiles() = lockedFiles.values.toList()
+
+    /**
+     * Read an entry from the archive.
+     *
+     * @param resources The [Apk.Resources] to use when decoding XML.
+     * @param handle The [FileHandle] to read from.
+     * @return A [ReadResult] containing the contents of the entry.
+     */
     fun read(resources: Apk.Resources, handle: FileHandle) =
         archive.getInputSource(handle.archivePath)?.let { inputSource ->
             try {
@@ -59,10 +77,24 @@ internal class Archive(private val module: ApkModule) {
             }
         }
 
-    fun writeRaw(path: String, content: ByteArray) = archive.add(ByteInputSource(content, path))
-    fun writeXml(resources: Apk.Resources, path: String, document: XMLDocument) = archive.add(
+    /**
+     * Write the byte array to the archive entry associated with the [FileHandle].
+     *
+     * @param handle The file whose contents will be replaced.
+     * @param content The content of the file.
+     */
+    fun writeRaw(handle: FileHandle, content: ByteArray) = archive.add(ByteInputSource(content, handle.archivePath))
+
+    /**
+     * Write the XML to the entry associated with the [FileHandle].
+     *
+     * @param resources The [Apk.Resources] used to encode the file.
+     * @param handle The file whose contents will be replaced.
+     * @param document The XML document to encode.
+     */
+    fun writeXml(resources: Apk.Resources, handle: FileHandle, document: XMLDocument) = archive.add(
         LazyXMLInputSource(
-            path,
+            handle.archivePath,
             document,
             resources.global.encodeMaterials
         )
