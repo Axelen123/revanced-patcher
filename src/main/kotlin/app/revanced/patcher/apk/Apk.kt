@@ -47,6 +47,14 @@ sealed class Apk private constructor(internal val module: ApkModule) {
     internal val archive = Archive(module)
 
     /**
+     * Update the [PackageBlock] name to match the manifest.
+     */
+    protected open fun updatePackageBlock() {
+        resources.packageBlock!!.name = module.apkArchive.getInputSource(manifest).openStream()
+            .use { stream -> AndroidManifestBlock.load(stream) }.packageName
+    }
+
+    /**
      * Write the [Apk] to a file.
      *
      * @param options The [PatcherOptions] of the [Patcher].
@@ -58,15 +66,12 @@ sealed class Apk private constructor(internal val module: ApkModule) {
             it.close()
         }
 
-        val apkArchive = module.apkArchive
-
         resources.useMaterials {
-            apkArchive.listInputSources().filterIsInstance<LazyXMLInputSource>().forEach(LazyXMLInputSource::encode)
+            module.apkArchive.listInputSources().filterIsInstance<LazyXMLInputSource>()
+                .forEach(LazyXMLInputSource::encode)
         }
 
-        // Update package block name
-        resources.packageBlock?.name = apkArchive.getInputSource(manifest).openStream()
-            .use { stream -> AndroidManifestBlock.load(stream) }.packageName
+        updatePackageBlock()
 
         module.writeApk(file)
     }
@@ -255,6 +260,9 @@ sealed class Apk private constructor(internal val module: ApkModule) {
                  */
                 val architectures = setOf("armeabi_v7a", "arm64_v8a", "x86", "x86_64")
             }
+
+            // Library splits do not have a resource table.
+            override fun updatePackageBlock() {}
         }
 
         /**
