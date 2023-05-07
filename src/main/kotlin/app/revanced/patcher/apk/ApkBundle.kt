@@ -74,20 +74,22 @@ class ApkBundle(files: List<File>) {
     }
 
     /**
-     * Refresh some additional resources in the [ApkBundle] that have been patched.
+     * Write all the [Apk]s inside the bundle to a folder.
      *
      * @param options The [PatcherOptions] of the [Patcher].
+     * @param folder The folder to write the [Apk]s to.
      * @return A sequence of the [Apk] files which are being refreshed.
      */
-    internal fun finalize(options: PatcherOptions) = all.map {
+    internal fun write(options: PatcherOptions, folder: File) = all.map {
+        val file = folder.resolve(it.toString())
         var exception: Apk.ApkException? = null
         try {
-            it.finalize(options)
+            it.write(options, file)
         } catch (e: Apk.ApkException) {
             exception = e
         }
 
-        SplitApkResult(it, exception)
+        SplitApkResult(it, file, exception)
     }
 
     inner class GlobalResources {
@@ -147,7 +149,8 @@ class ApkBundle(files: List<File>) {
      * The result of writing an [Apk] file.
      *
      * @param apk The corresponding [Apk] file.
+     * @param file The location that the [Apk] was written to.
      * @param exception The optional [Apk.ApkException] when an exception occurred.
      */
-    data class SplitApkResult(val apk: Apk, val exception: Apk.ApkException? = null)
+    data class SplitApkResult(val apk: Apk, val file: File, val exception: Apk.ApkException? = null)
 }

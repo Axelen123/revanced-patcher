@@ -47,11 +47,12 @@ sealed class Apk private constructor(internal val module: ApkModule) {
     internal val archive = Archive(module)
 
     /**
-     * Refresh updated resources for an [Apk].
+     * Write the [Apk] to a file.
      *
      * @param options The [PatcherOptions] of the [Patcher].
+     * @param file The target file.
      */
-    internal open fun finalize(options: PatcherOptions) {
+    internal open fun write(options: PatcherOptions, file: File) {
         archive.openFiles().forEach {
             options.logger.warn("${it.handle.virtualPath} was never closed!")
             it.close()
@@ -66,6 +67,8 @@ sealed class Apk private constructor(internal val module: ApkModule) {
         // Update package block name
         resources.packageBlock?.name = apkArchive.getInputSource(manifest).openStream()
             .use { stream -> AndroidManifestBlock.load(stream) }.packageName
+
+        module.writeApk(file)
     }
 
     inner class Resources(val tableBlock: TableBlock?) {
@@ -231,12 +234,6 @@ sealed class Apk private constructor(internal val module: ApkModule) {
         )
     }
 
-
-    /**
-     * @param output The [File] to write to.
-     */
-    fun write(output: File) = module.writeApk(output)
-
     /**
      * An [Apk] of type [Split].
      *
@@ -288,11 +285,11 @@ sealed class Apk private constructor(internal val module: ApkModule) {
 
         override fun toString() = "base.apk"
 
-        override fun finalize(options: PatcherOptions) {
-            super.finalize(options)
-
+        override fun write(options: PatcherOptions, file: File) {
             options.logger.info("Writing patched dex files")
             bytecodeData.writeDexFiles()
+
+            super.write(options, file)
         }
     }
 

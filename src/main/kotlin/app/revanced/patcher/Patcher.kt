@@ -158,29 +158,30 @@ class Patcher(private val options: PatcherOptions) {
     }
 
     /**
-     * Write patched resources and dex files.
+     * Write patched [Apk]s to a folder.
      *
+     * @param folder The output folder.
      * @return The [PatcherResult] of the [Patcher].
      */
-    fun write(): PatcherResult {
+    fun write(folder: File): PatcherResult {
         val patchResults = buildList {
-            logger.info("Writing patched resources")
-            options.apkBundle.finalize(options).forEach { writeResult ->
+            logger.info("Writing patched apks")
+            options.apkBundle.write(options, folder).forEach { writeResult ->
                 if (writeResult.exception != null) {
                     logger.error("Got exception while writing ${writeResult.apk}: ${writeResult.exception.stackTraceToString()}")
                     return@forEach
                 }
 
-                val patch = writeResult.apk.let {
-                    when (it) {
-                        is Apk.Base -> PatcherResult.Patch.Base(it)
-                        is Apk.Split -> PatcherResult.Patch.Split(it)
+                val patch = writeResult.let {
+                    when (it.apk) {
+                        is Apk.Base -> PatcherResult.Patch.Base(it.apk, it.file)
+                        is Apk.Split -> PatcherResult.Patch.Split(it.apk, it.file)
                     }
                 }
 
                 add(patch)
 
-                logger.info("Patched resources written for ${writeResult.apk}")
+                logger.info("Wrote ${writeResult.apk}")
             }
         }
 
