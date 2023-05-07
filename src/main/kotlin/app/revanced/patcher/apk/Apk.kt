@@ -240,44 +240,39 @@ sealed class Apk private constructor(internal val module: ApkModule) {
     /**
      * An [Apk] of type [Split].
      *
+     * @param config The device configuration associated with this [Split], such as arm64_v8a, en or xhdpi.
      * @see Apk
      */
-    class Split internal constructor(module: ApkModule) : Apk(module) {
-        /**
-         * An enum representing the three split configuration types.
-         */
-        enum class Type {
-            LANGUAGE, LIBRARY, ASSET;
-        }
-
-        private companion object {
-            val architectures = setOf("armeabi_v7a", "arm64_v8a", "x86", "x86_64")
-        }
-
-        /**
-         * The device configuration associated with this [Split], such as arm64_v8a, en or xhdpi.
-         */
-        val config = module.split.removePrefix("config.")
-
-        /**
-         * The [Type] of this [Split].
-         */
-        val type: Type = run {
-            if (config.length == 2) {
-                return@run Type.LANGUAGE
-            }
-            if (architectures.contains(config)) {
-                return@run Type.LIBRARY
-            }
-
-            val density = ResConfig.Density.valueOf(config)
-            if (density != null) {
-                return@run Type.ASSET
-            }
-            throw Error("Cannot figure out the split type of: $config")
-        }
-
+    sealed class Split(val config: String, module: ApkModule) : Apk(module) {
         override fun toString() = "split_config.$config.apk"
+
+        /**
+         * The split apk file which contains libraries.
+         *
+         * @see Split
+         */
+        class Library internal constructor(config: String, module: ApkModule) : Split(config, module) {
+            companion object {
+                /**
+                 * A set of all architectures supported by android.
+                 */
+                val architectures = setOf("armeabi_v7a", "arm64_v8a", "x86", "x86_64")
+            }
+        }
+
+        /**
+         * The split apk file which contains language strings.
+         *
+         * @see Split
+         */
+        class Language internal constructor(config: String, module: ApkModule) : Split(config, module)
+
+        /**
+         * The split apk file which contains assets.
+         *
+         * @see Split
+         */
+        class Asset internal constructor(config: String, module: ApkModule) : Split(config, module)
     }
 
     /**

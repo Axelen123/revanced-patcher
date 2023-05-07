@@ -6,6 +6,7 @@ import com.reandroid.apk.ApkModule
 import com.reandroid.apk.ResourceIds
 import com.reandroid.apk.xmlencoder.EncodeMaterials
 import com.reandroid.arsc.util.FrameworkTable
+import com.reandroid.arsc.value.ResConfig
 import com.reandroid.common.TableEntryStore
 import java.io.File
 
@@ -15,9 +16,15 @@ import java.io.File
  * @param files A list of apk files to load.
  */
 class ApkBundle(files: List<File>) {
-
+    /**
+     * The [Apk.Base] of this [ApkBundle].
+     */
     val base: Apk.Base
-    val split: Split?
+
+    /**
+     * A map containing all the [Apk.Split]s in this bundle associated by their configuration.
+     */
+    val splits: Map<String, Apk.Split>?
 
     private fun ApkModule.isFeatureModule() = androidManifestBlock.manifestElement.let {
         it.searchAttributeByName("isFeatureSplit")?.valueAsBoolean == true || it.searchAttributeByName("configForSplit") != null
@@ -25,7 +32,7 @@ class ApkBundle(files: List<File>) {
 
     init {
         var baseApk: Apk.Base? = null
-        val splits = mutableListOf<Apk.Split>()
+        val splitList = mutableListOf<Apk.Split>()
 
         files.forEach {
             val module = ApkModule.loadApkFile(it)
@@ -37,17 +44,31 @@ class ApkBundle(files: List<File>) {
                     baseApk = Apk.Base(module)
                 }
 
-                !module.isFeatureModule() -> splits.add(Apk.Split(module))
+                !module.isFeatureModule() -> {
+                    val config = module.split.removePrefix("config.")
+
+                    splitList.add(
+                        when {
+                            config.length == 2 -> Apk.Split.Language(config, module)
+                            Apk.Split.Library.architectures.contains(config) -> Apk.Split.Library(config, module)
+                            ResConfig.Density.valueOf(config) != null -> Apk.Split.Asset(config, module)
+                            else -> throw IllegalArgumentException("Unknown split: $config")
+                        }
+                    )
+                }
             }
         }
 
-        split = splits.takeIf { it.size > 0 }?.let { Split(it) }
+        splits = splitList.takeIf { it.size > 0 }?.let { splitList.associateBy { it.config } }
         base = baseApk ?: throw IllegalArgumentException("Base apk not found")
     }
 
+    /**
+     * A [Sequence] yielding all [Apk]s in this [ApkBundle].
+     */
     val all = sequence {
         yield(base)
-        split?.all?.let {
+        splits?.values?.let {
             yieldAll(it)
         }
     }
@@ -74,7 +95,12 @@ class ApkBundle(files: List<File>) {
         internal val resTable: ResourceIds.Table.Package
         internal val encodeMaterials = EncodeMaterials()
 
-        fun query(config: String) = split?.configs?.get(config)?.resources ?: base.resources
+        /**
+         * Get the [Apk.Resources] for the specified configuration.
+         *
+         * @param config The config to search for.
+         */
+        fun query(config: String) = splits?.get(config)?.resources ?: base.resources
 
         /**
          * Resolve a resource id for the specified resource.
@@ -112,23 +138,13 @@ class ApkBundle(files: List<File>) {
         }
     }
 
+    /**
+     * The global resource container.
+     */
     val resources = GlobalResources()
 
     /**
-     * Class for [Apk.Split].
-     *
-     * @param library The apk file of type [Apk.Base].
-     * @param asset The apk file of type [Apk.Base].
-     * @param language The apk file of type [Apk.Base].
-     */
-    class Split(
-        val all: List<Apk.Split>
-    ) {
-        val configs = all.associateBy { it.config }
-    }
-
-    /**
-     * The result of writing a [Split] [Apk] file.
+     * The result of writing an [Apk] file.
      *
      * @param apk The corresponding [Apk] file.
      * @param exception The optional [Apk.ApkException] when an exception occurred.
