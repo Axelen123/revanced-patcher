@@ -243,6 +243,9 @@ sealed class Apk private constructor(internal val module: ApkModule) {
      * @see Apk
      */
     class Split internal constructor(module: ApkModule) : Apk(module) {
+        /**
+         * An enum representing the three split configuration types.
+         */
         enum class Type {
             LANGUAGE, LIBRARY, ASSET;
         }
@@ -251,7 +254,14 @@ sealed class Apk private constructor(internal val module: ApkModule) {
             val architectures = setOf("armeabi_v7a", "arm64_v8a", "x86", "x86_64")
         }
 
+        /**
+         * The device configuration associated with this [Split], such as arm64_v8a, en or xhdpi.
+         */
         val config = module.split.removePrefix("config.")
+
+        /**
+         * The [Type] of this [Split].
+         */
         val type: Type = run {
             if (config.length == 2) {
                 return@run Type.LANGUAGE
