@@ -233,9 +233,9 @@ sealed class Apk private constructor(internal val module: ApkModule) {
      * @param packageName The package name of the [Apk] file.
      * @param packageVersion The package version of the [Apk] file.
      */
-    data class PackageMetadata(val packageName: String, val packageVersion: String) {
+    data class PackageMetadata(val packageName: String, val packageVersion: String?) {
         internal constructor(manifestBlock: AndroidManifestBlock) : this(
-            manifestBlock.packageName ?: "unnamed split apk file", manifestBlock.versionName ?: "0.0.0"
+            manifestBlock.packageName ?: "unnamed split apk file", manifestBlock.versionName
         )
     }
 
