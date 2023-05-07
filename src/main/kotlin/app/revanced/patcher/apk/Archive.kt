@@ -51,11 +51,11 @@ internal class Archive(private val module: ApkModule) {
     /**
      * Read an entry from the archive.
      *
-     * @param resources The [Apk.Resources] to use when decoding XML.
+     * @param resources The [Apk.ResourceContainer] to use when decoding XML.
      * @param handle The [FileHandle] to read from.
      * @return A [ReadResult] containing the contents of the entry.
      */
-    fun read(resources: Apk.Resources, handle: FileHandle) =
+    fun read(resources: Apk.ResourceContainer, handle: FileHandle) =
         archive.getInputSource(handle.archivePath)?.let { inputSource ->
             try {
                 val xml = when {
@@ -88,11 +88,11 @@ internal class Archive(private val module: ApkModule) {
     /**
      * Write the XML to the entry associated with the [FileHandle].
      *
-     * @param resources The [Apk.Resources] used to encode the file.
+     * @param resources The [Apk.ResourceContainer] used to encode the file.
      * @param handle The file whose contents will be replaced.
      * @param document The XML document to encode.
      */
-    fun writeXml(resources: Apk.Resources, handle: FileHandle, document: XMLDocument) = archive.add(
+    fun writeXml(resources: Apk.ResourceContainer, handle: FileHandle, document: XMLDocument) = archive.add(
         LazyXMLInputSource(
             handle.archivePath,
             document,

@@ -14,7 +14,7 @@ import java.io.OutputStream
 class ResourceFile private constructor(
     internal val handle: FileHandle,
     private val archive: Archive,
-    private val resources: Apk.Resources,
+    private val resources: Apk.ResourceContainer,
     readResult: Archive.ReadResult?
 ) :
     Closeable {
@@ -26,7 +26,7 @@ class ResourceFile private constructor(
      * @param archive The [Archive] that the file resides in
      * @param resources Resources used to resolve paths and encode XML
      */
-    internal constructor(handle: FileHandle, archive: Archive, resources: Apk.Resources) : this(
+    internal constructor(handle: FileHandle, archive: Archive, resources: Apk.ResourceContainer) : this(
         handle,
         archive,
         resources,

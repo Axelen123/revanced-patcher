@@ -98,7 +98,7 @@ class ApkBundle(files: List<File>) {
         internal val encodeMaterials = EncodeMaterials()
 
         /**
-         * Get the [Apk.Resources] for the specified configuration.
+         * Get the [Apk.ResourceContainer] for the specified configuration.
          *
          * @param config The config to search for.
          */

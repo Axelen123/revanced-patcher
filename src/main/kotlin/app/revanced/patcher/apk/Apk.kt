@@ -76,7 +76,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
         module.writeApk(file)
     }
 
-    inner class Resources(val tableBlock: TableBlock?) {
+    inner class ResourceContainer(val tableBlock: TableBlock?) {
         internal val packageBlock: PackageBlock? =
             tableBlock?.packageArray?.let { array ->
                 if (array.childes.size == 1) array[0] else array.iterator()?.asSequence()
@@ -116,7 +116,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
             val specRef = specReference
             ensureComplex(value.complex)
             specReference = specRef
-            value.write(this, this@Resources)
+            value.write(this, this@ResourceContainer)
         }
 
         private fun getEntry(type: String, name: String, qualifiers: String?) =
@@ -174,7 +174,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
         fun openXmlFile(path: String) = DomFileEditor(openFile(path))
     }
 
-    val resources = Resources(module.tableBlock)
+    val resources = ResourceContainer(module.tableBlock)
 
     internal inner class BytecodeData {
         private val dexFile = MultiDexContainerBackedDexFile(object : MultiDexContainer<DexBackedDexFile> {
