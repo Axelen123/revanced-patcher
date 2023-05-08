@@ -99,12 +99,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
             }
         }
 
-        internal fun <R> usePackageBlock(callback: (PackageBlock) -> R): R {
-            if (packageBlock == null) {
-                throw ApkException.MissingResourceTable
-            }
-            return callback(packageBlock)
-        }
+        internal fun expectPackageBlock() = packageBlock ?: throw ApkException.MissingResourceTable
 
         internal fun resolve(ref: String) = try {
             useMaterials { it.resolveReference(ref) }
@@ -125,7 +120,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
                 tableBlock?.resolveReference(id)?.singleOrNull { it.resConfig == config }
             }
 
-        private fun getHandle(resPath: String): FileHandle {
+        private fun getHandle(resPath: String): ResourceFile.Handle {
             if (resPath.startsWith("res/values")) throw ApkException.Decode("Decoding the resource table as a file is not supported")
 
             var callback = {}
@@ -150,27 +145,50 @@ sealed class Apk private constructor(internal val module: ApkModule) {
                 }
             }
 
-            return FileHandle(resPath, archivePath, callback)
+            return ResourceFile.Handle(resPath, archivePath, callback)
         }
 
+        /**
+         * Create or update an Android resource.
+         *
+         * @param type The resource type.
+         * @param name The name of the resource.
+         * @param value The resource data.
+         * @param configuration The resource configuration.
+         */
         fun set(type: String, name: String, value: Resource, configuration: String? = null) =
-            usePackageBlock { pkg -> pkg.getOrCreate(configuration, type, name).also { it.setTo(value) }.resourceId }
+            expectPackageBlock().getOrCreate(configuration, type, name).also { it.setTo(value) }.resourceId
 
+        /**
+         * Create or update multiple resources in an ARSC type block.
+         *
+         * @param type The resource type.
+         * @param map A map of resource names to the corresponding value.
+         * @param configuration The resource configuration.
+         */
         fun setGroup(type: String, map: Map<String, Resource>, configuration: String? = null) {
-            usePackageBlock { pkg ->
-                pkg.getOrCreateSpecType(type).getOrCreateTypeBlock(configuration).apply {
-                    map.forEach { (name, value) -> getOrCreateEntry(name).setTo(value) }
-                }
+            expectPackageBlock().getOrCreateSpecType(type).getOrCreateTypeBlock(configuration).apply {
+                map.forEach { (name, value) -> getOrCreateEntry(name).setTo(value) }
             }
         }
 
         /**
-         * Open a [app.revanced.patcher.apk.ResourceFile]
+         * Open a resource file, creating it if the file does not exist.
+         *
+         * @param path The resource file path.
+         * @return The corresponding [ResourceFile],
          */
         fun openFile(path: String) = ResourceFile(
             resources.getHandle(path), archive, this
         )
 
+        /**
+         * Open a [DomFileEditor] for a resource file in the archive.
+         *
+         * @see openFile
+         * @param path The resource file path.
+         * @return A [DomFileEditor].
+         */
         fun openXmlFile(path: String) = DomFileEditor(openFile(path))
     }
 

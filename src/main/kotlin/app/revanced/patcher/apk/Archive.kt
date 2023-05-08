@@ -9,16 +9,20 @@ import com.reandroid.xml.XMLDocument
 import com.reandroid.xml.XMLException
 import java.io.IOException
 
-/**
- * @param virtualPath The resource file path (res/drawable-hdpi/icon.png)
- * @param archivePath The actual file path in the archive (res/4a.png)
- * @param close An action to perform when the file associated with this handle is closed
- */
-internal data class FileHandle(val virtualPath: String, val archivePath: String, val close: () -> Unit)
-
 private fun isResXml(inputSource: InputSource) = inputSource.openStream().use { ResXmlDocument.isResXmlBlock(it) }
 
+/**
+ * A class for reading/writing files in an [ApkModule].
+ *
+ * @param module The [ApkModule] to operate on.
+ */
 internal class Archive(private val module: ApkModule) {
+    /**
+     * The result of a [read] operation.
+     *
+     * @param xml Whether the contents were decoded from a [ResXmlDocument].
+     * @param data The contents of the file.
+     */
     class ReadResult(val xml: Boolean, val data: ByteArray)
 
     private val archive = module.apkArchive
@@ -44,6 +48,8 @@ internal class Archive(private val module: ApkModule) {
     }
 
     /**
+     * Get all open files.
+     *
      * @return A list of all currently open files
      */
     fun openFiles() = lockedFiles.values.toList()
@@ -52,10 +58,10 @@ internal class Archive(private val module: ApkModule) {
      * Read an entry from the archive.
      *
      * @param resources The [Apk.ResourceContainer] to use when decoding XML.
-     * @param handle The [FileHandle] to read from.
+     * @param handle The [ResourceFile.Handle] to read from.
      * @return A [ReadResult] containing the contents of the entry.
      */
-    fun read(resources: Apk.ResourceContainer, handle: FileHandle) =
+    fun read(resources: Apk.ResourceContainer, handle: ResourceFile.Handle) =
         archive.getInputSource(handle.archivePath)?.let { inputSource ->
             try {
                 val xml = when {
@@ -78,21 +84,21 @@ internal class Archive(private val module: ApkModule) {
         }
 
     /**
-     * Write the byte array to the archive entry associated with the [FileHandle].
+     * Write the byte array to the archive entry associated with the [ResourceFile.Handle].
      *
      * @param handle The file whose contents will be replaced.
      * @param content The content of the file.
      */
-    fun writeRaw(handle: FileHandle, content: ByteArray) = archive.add(ByteInputSource(content, handle.archivePath))
+    fun writeRaw(handle: ResourceFile.Handle, content: ByteArray) = archive.add(ByteInputSource(content, handle.archivePath))
 
     /**
-     * Write the XML to the entry associated with the [FileHandle].
+     * Write the XML to the entry associated with the [ResourceFile.Handle].
      *
      * @param resources The [Apk.ResourceContainer] used to encode the file.
      * @param handle The file whose contents will be replaced.
      * @param document The XML document to encode.
      */
-    fun writeXml(resources: Apk.ResourceContainer, handle: FileHandle, document: XMLDocument) = archive.add(
+    fun writeXml(resources: Apk.ResourceContainer, handle: ResourceFile.Handle, document: XMLDocument) = archive.add(
         LazyXMLInputSource(
             handle.archivePath,
             document,

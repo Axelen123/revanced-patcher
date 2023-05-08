@@ -12,12 +12,20 @@ import java.io.OutputStream
  * A resource file inside an [Apk].
  */
 class ResourceFile private constructor(
-    internal val handle: FileHandle,
+    internal val handle: Handle,
     private val archive: Archive,
     private val resources: Apk.ResourceContainer,
     readResult: Archive.ReadResult?
 ) :
     Closeable {
+
+    /**
+     * @param virtualPath The resource file path (res/drawable-hdpi/icon.png)
+     * @param archivePath The actual file path in the archive (res/4a.png)
+     * @param close An action to perform when the file associated with this handle is closed
+     */
+    internal data class Handle(val virtualPath: String, val archivePath: String, val close: () -> Unit)
+
     private var changed = false
     private val xml = readResult?.xml ?: handle.virtualPath.endsWith(".xml")
 
@@ -26,7 +34,7 @@ class ResourceFile private constructor(
      * @param archive The [Archive] that the file resides in
      * @param resources Resources used to resolve paths and encode XML
      */
-    internal constructor(handle: FileHandle, archive: Archive, resources: Apk.ResourceContainer) : this(
+    internal constructor(handle: Handle, archive: Archive, resources: Apk.ResourceContainer) : this(
         handle,
         archive,
         resources,
