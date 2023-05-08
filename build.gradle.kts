@@ -52,6 +52,10 @@ java {
     withSourcesJar()
 }
 
+kotlin {
+    jvmToolchain(11)
+}
+
 publishing {
     repositories {
         if (System.getenv("GITHUB_ACTOR") != null)
