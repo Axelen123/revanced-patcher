@@ -5,7 +5,7 @@ package app.revanced.patcher.apk
 import app.revanced.patcher.DomFileEditor
 import app.revanced.patcher.Patcher
 import app.revanced.patcher.PatcherOptions
-import app.revanced.patcher.arsc.*
+import app.revanced.patcher.resource.*
 import app.revanced.patcher.util.ProxyBackedClassList
 import app.revanced.patcher.util.xml.LazyXMLInputSource
 import com.reandroid.apk.ApkModule

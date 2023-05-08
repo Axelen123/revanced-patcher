@@ -1,4 +1,4 @@
-package app.revanced.patcher.arsc
+package app.revanced.patcher.resource
 
 import app.revanced.patcher.apk.Apk
 import com.reandroid.arsc.decoder.ValueDecoder
