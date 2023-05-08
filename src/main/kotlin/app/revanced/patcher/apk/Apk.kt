@@ -108,9 +108,11 @@ sealed class Apk private constructor(internal val module: ApkModule) {
         }
 
         private fun Entry.setTo(value: Resource) {
+            // Preserve the entry name by restoring the spec reference.
             val specRef = specReference
             ensureComplex(value.complex)
             specReference = specRef
+
             value.write(this, this@ResourceContainer)
         }
 
@@ -120,7 +122,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
                 tableBlock?.resolveReference(id)?.singleOrNull { it.resConfig == config }
             }
 
-        private fun getHandle(resPath: String): ResourceFile.Handle {
+        private fun createHandle(resPath: String): ResourceFile.Handle {
             if (resPath.startsWith("res/values")) throw ApkException.Decode("Decoding the resource table as a file is not supported")
 
             var callback = {}
@@ -179,7 +181,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
          * @return The corresponding [ResourceFile],
          */
         fun openFile(path: String) = ResourceFile(
-            resources.getHandle(path), archive, this
+            resources.createHandle(path), archive, this
         )
 
         /**
