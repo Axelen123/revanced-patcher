@@ -112,7 +112,7 @@ class ApkBundle(files: List<File>) {
          * @return The id of the resource.
          */
         fun resolve(type: String, name: String) =
-            resTable.getResourceId(type, name) ?: throw Apk.ApkException.ReferenceError(type, name)
+            resTable.getResourceId(type, name) ?: throw Apk.ApkException.InvalidReference(type, name)
 
         init {
             val resourceIds = ResourceIds()

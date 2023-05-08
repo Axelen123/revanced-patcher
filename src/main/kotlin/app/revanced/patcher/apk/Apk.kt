@@ -104,7 +104,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
         internal fun resolve(ref: String) = try {
             useMaterials { it.resolveReference(ref) }
         } catch (e: EncodeException) {
-            throw ApkException.ReferenceError(ref, e)
+            throw ApkException.InvalidReference(ref, e)
         }
 
         private fun Entry.setTo(value: Resource) {
@@ -350,7 +350,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
          * @param ref The invalid reference.
          * @param throwable The corresponding [Throwable].
          */
-        class ReferenceError(ref: String, throwable: Throwable? = null) :
+        class InvalidReference(ref: String, throwable: Throwable? = null) :
             ApkException("Failed to resolve: $ref", throwable) {
             constructor(type: String, name: String, throwable: Throwable? = null) : this("@$type/$name", throwable)
         }
