@@ -76,7 +76,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
         module.writeApk(file)
     }
 
-    inner class ResourceContainer(val tableBlock: TableBlock?) {
+    inner class ResourceContainer(internal val tableBlock: TableBlock?) {
         internal val packageBlock: PackageBlock? =
             tableBlock?.packageArray?.let { array ->
                 if (array.childes.size == 1) array[0] else array.iterator()?.asSequence()
