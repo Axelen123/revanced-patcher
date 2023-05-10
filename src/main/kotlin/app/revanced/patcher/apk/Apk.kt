@@ -16,8 +16,10 @@ import com.reandroid.archive.InputSource
 import com.reandroid.arsc.chunk.PackageBlock
 import com.reandroid.arsc.chunk.TableBlock
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
+import com.reandroid.arsc.decoder.ValueDecoder
 import com.reandroid.arsc.value.Entry
 import com.reandroid.arsc.value.ResConfig
+import com.reandroid.xml.XMLDocument
 import lanchon.multidexlib2.BasicDexEntry
 import lanchon.multidexlib2.DexIO
 import lanchon.multidexlib2.MultiDexContainerBackedDexFile
@@ -28,6 +30,7 @@ import org.jf.dexlib2.iface.DexFile
 import org.jf.dexlib2.iface.MultiDexContainer
 import org.jf.dexlib2.writer.io.MemoryDataStore
 import java.io.File
+import java.io.InputStream
 import java.util.zip.ZipEntry
 
 
@@ -172,6 +175,26 @@ sealed class Apk private constructor(internal val module: ApkModule) {
             expectPackageBlock().getOrCreateSpecType(type).getOrCreateTypeBlock(configuration).apply {
                 map.forEach { (name, value) -> getOrCreateEntry(name).setTo(value) }
             }
+        }
+
+        /**
+         * Merge all strings from the strings.xml resource file.
+         *
+         * @param host The hosting xml resource. Needs to be a valid strings.xml file.
+         * @param callback A callback to run when a string is added.
+         */
+        fun mergeStrings(host: InputStream, callback: (Pair<String, String>) -> Unit = { }) {
+            setGroup("string", XMLDocument.load(host).documentElement.listChildElements().associate {
+                val name = it.getAttribute("name")?.value
+                if (it.tagName != "string" || name == null) {
+                    throw ApkException.Encode("Invalid element: $it")
+                }
+
+                val content = ValueDecoder.unEscapeSpecialCharacter(it.textContent)
+
+                callback(name to content)
+                name to StringResource(content)
+            })
         }
 
         /**
