@@ -20,6 +20,7 @@ import com.reandroid.arsc.decoder.ValueDecoder
 import com.reandroid.arsc.value.Entry
 import com.reandroid.arsc.value.ResConfig
 import com.reandroid.xml.XMLDocument
+import com.reandroid.xml.XMLSpannable
 import lanchon.multidexlib2.BasicDexEntry
 import lanchon.multidexlib2.DexIO
 import lanchon.multidexlib2.MultiDexContainerBackedDexFile
@@ -181,18 +182,19 @@ sealed class Apk private constructor(internal val module: ApkModule) {
          * Merge all strings from the strings.xml resource file.
          *
          * @param host The hosting xml resource. Needs to be a valid strings.xml file.
-         * @param callback A callback to run when a string is added.
          */
-        fun mergeStrings(host: InputStream, callback: (Pair<String, String>) -> Unit = { }) {
+        fun mergeStrings(host: InputStream) {
             setGroup("string", XMLDocument.load(host).documentElement.listChildElements().associate {
                 val name = it.getAttribute("name")?.value
                 if (it.tagName != "string" || name == null) {
                     throw ApkException.Encode("Invalid element: $it")
                 }
 
-                val content = ValueDecoder.unEscapeSpecialCharacter(it.textContent)
+                val content =
+                    if (it.hasChildElements()) XMLSpannable(it).xml else ValueDecoder.unEscapeSpecialCharacter(
+                        ValueDecoder.unQuoteWhitespace(it.textContent)
+                    )
 
-                callback(name to content)
                 name to StringResource(content)
             })
         }
