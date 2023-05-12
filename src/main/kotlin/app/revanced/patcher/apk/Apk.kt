@@ -179,27 +179,6 @@ sealed class Apk private constructor(internal val module: ApkModule) {
         }
 
         /**
-         * Merge all strings from the strings.xml resource file.
-         *
-         * @param host The hosting xml resource. Needs to be a valid strings.xml file.
-         */
-        fun mergeStrings(host: InputStream) {
-            setGroup("string", XMLDocument.load(host).documentElement.listChildElements().associate {
-                val name = it.getAttribute("name")?.value
-                if (it.tagName != "string" || name == null) {
-                    throw ApkException.Encode("Invalid element: $it")
-                }
-
-                val content =
-                    if (it.hasChildElements()) XMLSpannable(it).xml else ValueDecoder.unEscapeSpecialCharacter(
-                        ValueDecoder.unQuoteWhitespace(it.textContent)
-                    )
-
-                name to StringResource(content)
-            })
-        }
-
-        /**
          * Open a resource file, creating it if the file does not exist.
          *
          * @param path The resource file path.
