@@ -1,3 +1,43 @@
+# [9.0.0](https://github.com/revanced/revanced-patcher/compare/v8.0.0...v9.0.0) (2023-05-23)
+
+
+* refactor!: rename parameter ([526a3d7](https://github.com/revanced/revanced-patcher/commit/526a3d7c359e2d95d26756da0f88d5ce975f5d9b))
+
+
+### BREAKING CHANGES
+
+* This changes named parameters.
+
+# [9.0.0-dev.1](https://github.com/revanced/revanced-patcher/compare/v8.0.0...v9.0.0-dev.1) (2023-05-23)
+
+
+* refactor!: rename parameter ([526a3d7](https://github.com/revanced/revanced-patcher/commit/526a3d7c359e2d95d26756da0f88d5ce975f5d9b))
+
+
+### BREAKING CHANGES
+
+* This changes named parameters.
+
+# [8.0.0](https://github.com/revanced/revanced-patcher/compare/v7.1.1...v8.0.0) (2023-05-13)
+
+
+* feat!: add `classDef` parameter to `MethodFingerprint` (#175) ([a205220](https://github.com/revanced/revanced-patcher/commit/a2052202b23037150df6aadc47f6e91efcd481cf)), closes [#175](https://github.com/revanced/revanced-patcher/issues/175)
+
+
+### BREAKING CHANGES
+
+* This changes the signature of the `customFingerprint` function.
+
+# [8.0.0-dev.1](https://github.com/revanced/revanced-patcher/compare/v7.1.1...v8.0.0-dev.1) (2023-05-10)
+
+
+* feat!: add `classDef` parameter to `MethodFingerprint` (#175) ([a205220](https://github.com/revanced/revanced-patcher/commit/a2052202b23037150df6aadc47f6e91efcd481cf)), closes [#175](https://github.com/revanced/revanced-patcher/issues/175)
+
+
+### BREAKING CHANGES
+
+* This changes the signature of the `customFingerprint` function.
+
 ## [7.1.1](https://github.com/revanced/revanced-patcher/compare/v7.1.0...v7.1.1) (2023-05-07)
 
 

@@ -8,6 +8,7 @@ import org.jf.dexlib2.DexFileFactory
 import java.io.File
 import java.net.URLClassLoader
 import java.util.jar.JarFile
+import kotlin.streams.toList
 
 /**
  * A patch bundle.
@@ -35,16 +36,15 @@ sealed class PatchBundle : Iterable<PatchClass> {
      * @param patchBundlePath The path to a patch bundle.
      */
     class Jar(private val patchBundlePath: String) : PatchBundle() {
-        override fun classLoader() = URLClassLoader(arrayOf(File(patchBundlePath).toURI().toURL()), javaClass.classLoader)
+        override fun classLoader() =
+            URLClassLoader(arrayOf(File(patchBundlePath).toURI().toURL()), javaClass.classLoader)
+
         override val patchClassNames =
             JarFile(patchBundlePath)
-                .entries()
-                .toList() // TODO: find a cleaner solution than that to filter non class files
-                .filter {
-                    it.name.endsWith(".class") && !it.name.contains("$")
-                }.map {
-                    it.realName.replace('/', '.').replace(".class", "")
-                }
+                .stream()
+                .filter { it.name.endsWith(".class") && !it.name.contains("$") }
+                .map { it.realName.replace('/', '.').replace(".class", "") }
+                .toList()
     }
 
     /**
@@ -54,10 +54,8 @@ sealed class PatchBundle : Iterable<PatchClass> {
      */
     class Dex(private val patchBundlePath: String) : PatchBundle() {
         override fun classLoader() = PathClassLoader(patchBundlePath, null, javaClass.classLoader)
-        override val patchClassNames = DexFileFactory.loadDexFile(patchBundlePath, null).classes.map {
-            it.type
-                .substring(1, it.length - 1)
-                .replace('/', '.')
+        override val patchClassNames = DexFileFactory.loadDexFile(patchBundlePath, null).classes.map { classDef ->
+            classDef.type.substring(1, classDef.length - 1).replace('/', '.')
         }
     }
 }
