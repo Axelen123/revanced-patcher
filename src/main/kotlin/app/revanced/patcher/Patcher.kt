@@ -30,6 +30,12 @@ class Patcher(private val options: PatcherOptions) {
         internal val dexFileNamer = BasicDexFileNamer()
     }
 
+    init {
+        options.apkBundle.all.forEach {
+            it.logger = logger
+        }
+    }
+
     /**
      * Add integrations to be merged by the patcher.
      * The integrations will only be merged, if necessary.
@@ -166,7 +172,7 @@ class Patcher(private val options: PatcherOptions) {
     fun write(folder: File): PatcherResult {
         val patchResults = buildList {
             logger.info("Writing patched apks")
-            options.apkBundle.write(options, folder).forEach { writeResult ->
+            options.apkBundle.write(folder).forEach { writeResult ->
                 if (writeResult.exception != null) {
                     logger.error("Got exception while writing ${writeResult.apk}: ${writeResult.exception.stackTraceToString()}")
                     return@forEach

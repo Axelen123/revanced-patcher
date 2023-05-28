@@ -1,13 +1,12 @@
 package app.revanced.patcher.apk
 
-import app.revanced.patcher.Patcher
-import app.revanced.patcher.PatcherOptions
 import com.reandroid.apk.ApkModule
-import com.reandroid.apk.ResourceIds
 import com.reandroid.apk.xmlencoder.EncodeMaterials
 import com.reandroid.arsc.util.FrameworkTable
+import com.reandroid.arsc.value.Entry
 import com.reandroid.arsc.value.ResConfig
 import com.reandroid.common.TableEntryStore
+import com.reandroid.identifiers.TableIdentifier
 import java.io.File
 
 /**
@@ -76,15 +75,14 @@ class ApkBundle(files: List<File>) {
     /**
      * Write all the [Apk]s inside the bundle to a folder.
      *
-     * @param options The [PatcherOptions] of the [Patcher].
      * @param folder The folder to write the [Apk]s to.
      * @return A sequence of the [Apk] files which are being refreshed.
      */
-    internal fun write(options: PatcherOptions, folder: File) = all.map {
+    internal fun write(folder: File) = all.map {
         val file = folder.resolve(it.toString())
         var exception: Apk.ApkException? = null
         try {
-            it.write(options, file)
+            it.write(file)
         } catch (e: Apk.ApkException) {
             exception = e
         }
@@ -92,11 +90,15 @@ class ApkBundle(files: List<File>) {
         SplitApkResult(it, file, exception)
     }
 
-    inner class GlobalResources {
+    inner class ResourceTable {
+        private val packageName = base.packageMetadata.packageName
         internal val entryStore = TableEntryStore()
-        internal val resTable: ResourceIds.Table.Package
-        internal val encodeMaterials = EncodeMaterials()
+        internal val encodeMaterials: EncodeMaterials
+        internal val tableIdentifier: TableIdentifier
+        private val modifiedResources = HashMap<String, HashMap<String, Int>>()
 
+
+        // TODO: move this elsewhere
         /**
          * Get the [Apk.ResourceContainer] for the specified configuration.
          *
@@ -112,23 +114,34 @@ class ApkBundle(files: List<File>) {
          * @return The id of the resource.
          */
         fun resolve(type: String, name: String) =
-            resTable.getResourceId(type, name) ?: throw Apk.ApkException.InvalidReference(type, name)
+            modifiedResources[type]?.get(name)
+                ?: tableIdentifier.get(packageName, type, name)?.resourceId
+                ?: throw Apk.ApkException.InvalidReference(
+                    type,
+                    name
+                )
+
+        internal fun registerChanged(entry: Entry) {
+            modifiedResources.getOrPut(entry.typeName, ::HashMap)[entry.name] = entry.id
+        }
 
         init {
-            val resourceIds = ResourceIds()
+            encodeMaterials = object : EncodeMaterials() {
+                override fun resolveLocalResourceId(type: String, name: String) = resolve(type, name)
+            }
+            tableIdentifier = encodeMaterials.tableIdentifier
+
             all.map { it.resources }.forEach {
-                if (it.tableBlock != null) {
-                    entryStore.add(it.tableBlock)
-                    resourceIds.loadPackageBlock(it.packageBlock)
+                it.tableBlock?.let { table ->
+                    entryStore.add(table)
+                    tableIdentifier.load(table)
                 }
-                it.global = this
+
+                it.resourceTable = this
             }
 
             base.resources.also {
                 encodeMaterials.currentPackage = it.packageBlock
-                resTable =
-                    resourceIds.table.listPackages().onEach { pkg -> encodeMaterials.addPackageIds(pkg) }
-                        .single { pkg -> pkg.id == it.packageBlock!!.id.toByte() }
 
                 it.tableBlock!!.frameWorks.forEach { fw ->
                     if (fw is FrameworkTable) {
@@ -143,7 +156,7 @@ class ApkBundle(files: List<File>) {
     /**
      * The global resource container.
      */
-    val resources = GlobalResources()
+    val resources = ResourceTable()
 
     /**
      * The result of writing an [Apk] file.

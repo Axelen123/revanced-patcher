@@ -5,7 +5,10 @@ package app.revanced.patcher.apk
 import app.revanced.patcher.DomFileEditor
 import app.revanced.patcher.Patcher
 import app.revanced.patcher.PatcherOptions
-import app.revanced.patcher.resource.*
+import app.revanced.patcher.logging.Logger
+import app.revanced.patcher.resource.Resource
+import app.revanced.patcher.resource.StringResource
+import app.revanced.patcher.resource.complex
 import app.revanced.patcher.util.ProxyBackedClassList
 import app.revanced.patcher.util.xml.LazyXMLInputSource
 import com.reandroid.apk.ApkModule
@@ -16,22 +19,14 @@ import com.reandroid.archive.InputSource
 import com.reandroid.arsc.chunk.PackageBlock
 import com.reandroid.arsc.chunk.TableBlock
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
-import com.reandroid.arsc.decoder.ValueDecoder
 import com.reandroid.arsc.value.Entry
 import com.reandroid.arsc.value.ResConfig
-import com.reandroid.xml.XMLDocument
-import com.reandroid.xml.XMLSpannable
-import lanchon.multidexlib2.BasicDexEntry
-import lanchon.multidexlib2.DexIO
-import lanchon.multidexlib2.MultiDexContainerBackedDexFile
-import lanchon.multidexlib2.MultiDexIO
-import lanchon.multidexlib2.RawDexIO
+import lanchon.multidexlib2.*
 import org.jf.dexlib2.dexbacked.DexBackedDexFile
 import org.jf.dexlib2.iface.DexFile
 import org.jf.dexlib2.iface.MultiDexContainer
 import org.jf.dexlib2.writer.io.MemoryDataStore
 import java.io.File
-import java.io.InputStream
 import java.util.zip.ZipEntry
 
 
@@ -42,6 +37,8 @@ sealed class Apk private constructor(internal val module: ApkModule) {
     companion object {
         const val manifest = "AndroidManifest.xml"
     }
+
+    internal var logger: Logger? = null
 
     /**
      * The metadata of the [Apk].
@@ -61,12 +58,11 @@ sealed class Apk private constructor(internal val module: ApkModule) {
     /**
      * Write the [Apk] to a file.
      *
-     * @param options The [PatcherOptions] of the [Patcher].
      * @param file The target file.
      */
-    internal open fun write(options: PatcherOptions, file: File) {
+    internal open fun write(file: File) {
         archive.openFiles().forEach {
-            options.logger.warn("${it.handle.virtualPath} was never closed!")
+            logger?.warn("${it.handle.virtualPath} was never closed!")
             it.close()
         }
 
@@ -87,10 +83,10 @@ sealed class Apk private constructor(internal val module: ApkModule) {
                     ?.single { it.name == module.packageName }
             }
 
-        internal lateinit var global: ApkBundle.GlobalResources
+        internal lateinit var resourceTable: ApkBundle.ResourceTable
 
         internal fun <R> useMaterials(callback: (EncodeMaterials) -> R): R {
-            val materials = global.encodeMaterials
+            val materials = resourceTable.encodeMaterials
             val previous = materials.currentPackage
             if (packageBlock != null) {
                 materials.currentPackage = packageBlock
@@ -112,19 +108,25 @@ sealed class Apk private constructor(internal val module: ApkModule) {
         }
 
         private fun Entry.setTo(value: Resource) {
-            // Preserve the entry name by restoring the spec reference.
-            val specRef = specReference
+            val savedRef = specReference
             ensureComplex(value.complex)
-            specReference = specRef
+            if (savedRef != 0) {
+                // Preserve the entry name by restoring the previous spec block reference (if present).
+                specReference = savedRef
+            }
+
+            logger?.trace("Updated @$typeName/$name")
 
             value.write(this, this@ResourceContainer)
+            resourceTable.registerChanged(this)
         }
 
         private fun getEntry(type: String, name: String, qualifiers: String?) =
-            global.resTable.getResourceId(type, name)?.let { id ->
-                val config = ResConfig.parse(qualifiers)
-                tableBlock?.resolveReference(id)?.singleOrNull { it.resConfig == config }
-            }
+            resourceTable.tableIdentifier.get(expectPackageBlock().name, type, name)
+                ?.let { resIdentifier ->
+                    val config = ResConfig.parse(qualifiers)
+                    tableBlock?.resolveReference(resIdentifier.resourceId)?.singleOrNull { it.resConfig == config }
+                }
 
         private fun createHandle(resPath: String): ResourceFile.Handle {
             if (resPath.startsWith("res/values")) throw ApkException.Decode("Decoding the resource table as a file is not supported")
@@ -173,7 +175,7 @@ sealed class Apk private constructor(internal val module: ApkModule) {
          * @param configuration The resource configuration.
          */
         fun setGroup(type: String, map: Map<String, Resource>, configuration: String? = null) {
-            expectPackageBlock().getOrCreateSpecType(type).getOrCreateTypeBlock(configuration).apply {
+            expectPackageBlock().getOrCreateSpecTypePair(type).getOrCreateTypeBlock(configuration).apply {
                 map.forEach { (name, value) -> getOrCreateEntry(name).setTo(value) }
             }
         }
@@ -317,11 +319,11 @@ sealed class Apk private constructor(internal val module: ApkModule) {
 
         override fun toString() = "base.apk"
 
-        override fun write(options: PatcherOptions, file: File) {
-            options.logger.info("Writing patched dex files")
+        override fun write(file: File) {
+            logger?.info("Writing patched dex files")
             bytecodeData.writeDexFiles()
 
-            super.write(options, file)
+            super.write(file)
         }
     }
 

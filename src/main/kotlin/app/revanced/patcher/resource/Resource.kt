@@ -1,8 +1,8 @@
 package app.revanced.patcher.resource
 
 import app.revanced.patcher.apk.Apk
-import com.reandroid.arsc.decoder.ValueDecoder
-import com.reandroid.arsc.decoder.ValueDecoder.EncodeResult
+import com.reandroid.arsc.coder.ValueDecoder
+import com.reandroid.arsc.coder.EncodeResult
 import com.reandroid.arsc.value.Entry
 import com.reandroid.arsc.value.ValueType
 import com.reandroid.arsc.value.array.ArrayBag
@@ -64,6 +64,14 @@ fun color(hex: String) = encoded(ValueDecoder.encodeColor(hex))
 fun dimension(value: String) = encoded(ValueDecoder.encodeDimensionOrFraction(value))
 
 /**
+ * Encode a boolean resource.
+ *
+ * @param value The boolean.
+ * @return The encoded [Resource].
+ */
+fun boolean(value: Boolean) = Scalar(ValueType.INT_BOOLEAN, if (value) -Int.MAX_VALUE else 0)
+
+/**
  * Encode a float.
  *
  * @param n The number to encode.
@@ -123,7 +131,7 @@ class Style(private val elements: Map<String, Scalar>, private val parent: Strin
 
         style.putAll(
             elements.asIterable().associate {
-                StyleBag.resolve(resources.global.encodeMaterials, it.key) to it.value.toStyleItem(resources)
+                StyleBag.resolve(resources.resourceTable.encodeMaterials, it.key) to it.value.toStyleItem(resources)
             })
     }
 }

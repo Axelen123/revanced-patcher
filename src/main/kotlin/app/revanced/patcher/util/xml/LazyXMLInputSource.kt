@@ -1,10 +1,9 @@
 package app.revanced.patcher.util.xml
 
 import app.revanced.patcher.apk.Apk
+import app.revanced.patcher.resource.boolean
 import com.reandroid.apk.xmlencoder.EncodeException
-import com.reandroid.apk.xmlencoder.EncodeMaterials
 import com.reandroid.apk.xmlencoder.XMLEncodeSource
-import com.reandroid.arsc.chunk.PackageBlock
 import com.reandroid.arsc.chunk.xml.ResXmlDocument
 import com.reandroid.xml.XMLDocument
 import com.reandroid.xml.XMLElement
@@ -15,25 +14,23 @@ import com.reandroid.xml.source.XMLDocumentSource
  *
  * @param name The file name of this input source.
  * @param document The [XMLDocument] to encode.
- * @param materials The [EncodeMaterials] to use when encoding the document.
+ * @param resources The [Apk.ResourceContainer] to use for encoding.
  */
 internal class LazyXMLInputSource(
     name: String,
     val document: XMLDocument,
-    private val materials: EncodeMaterials
-) : XMLEncodeSource(materials, XMLDocumentSource(name, document)) {
-    private fun XMLElement.registerIds(
-        packageBlock: PackageBlock
-    ) {
+    private val resources: Apk.ResourceContainer
+) : XMLEncodeSource(resources.resourceTable.encodeMaterials, XMLDocumentSource(name, document)) {
+    private fun XMLElement.registerIds() {
         listAttributes().forEach { attr ->
             if (attr.value.startsWith("@+id/")) {
                 val name = attr.value.split('/').last()
-                packageBlock.getOrCreate("", "id", name).resValue.valueAsBoolean = false
+                resources.set("id", name, boolean(false))
                 attr.value = "@id/$name"
             }
         }
 
-        listChildElements().forEach { it.registerIds(packageBlock) }
+        listChildElements().forEach { it.registerIds() }
     }
 
     private var ready = false
@@ -50,7 +47,7 @@ internal class LazyXMLInputSource(
      */
     fun encode() {
         // Handle all @+id/id_name references in the document.
-        document.documentElement.registerIds(materials.currentPackage)
+        document.documentElement.registerIds()
 
         ready = true
 

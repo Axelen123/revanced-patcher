@@ -1,5 +1,6 @@
 package app.revanced.patcher.apk
 
+import app.revanced.patcher.resource.boolean
 import app.revanced.patcher.util.xml.LazyXMLInputSource
 import com.reandroid.apk.ApkModule
 import com.reandroid.archive.ByteInputSource
@@ -68,7 +69,7 @@ internal class Archive(private val module: ApkModule) {
                     inputSource is LazyXMLInputSource -> inputSource.document
                     isResXml(inputSource) -> module.loadResXmlDocument(
                         inputSource
-                    ).decodeToXml(resources.global.entryStore, resources.packageBlock?.id ?: 0)
+                    ).decodeToXml(resources.resourceTable.entryStore, resources.packageBlock?.id ?: 0)
 
                     else -> null
                 }
@@ -102,7 +103,7 @@ internal class Archive(private val module: ApkModule) {
         LazyXMLInputSource(
             handle.archivePath,
             document,
-            resources.global.encodeMaterials
+            resources,
         )
     )
 }
