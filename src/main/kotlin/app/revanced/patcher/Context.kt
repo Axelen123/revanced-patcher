@@ -16,7 +16,7 @@ import javax.xml.transform.stream.StreamResult
 
 /**
  * A common class to constrain [Context] to [BytecodeContext] and [ResourceContext].
- * @param apkBundle the [ApkBundle] for this context.
+ * @param apkBundle The [ApkBundle] for this context.
  */
 sealed class Context(val apkBundle: ApkBundle)
 
