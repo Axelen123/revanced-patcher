@@ -10,25 +10,20 @@ val githubPassword: String = project.findProperty("gpr.key") as? String ?: Syste
 
 repositories {
     mavenCentral()
-    fun githubPackages(repo: String) = maven {
-        url = uri("https://maven.pkg.github.com/revanced/$repo")
+    maven {
+        url = uri("https://maven.pkg.github.com/revanced/multidexlib2")
         credentials {
             username = githubUsername
             password = githubPassword
         }
     }
-
-    githubPackages("multidexlib2")
-    githubPackages("ARSCLib")
 }
 
 dependencies {
     implementation("xpp3:xpp3:1.1.4c")
     implementation("app.revanced:smali:2.5.3-a3836654")
     implementation("app.revanced:multidexlib2:2.5.3-a3836654")
-    // ARSCLib fork with a custom zip implementation to fix performance issues on Android devices.
-    // The fork will no longer be needed after archive2 is finished upstream (https://github.com/revanced/ARSCLib/issues/2).
-    implementation("app.revanced:arsclib:1.1.6")
+    implementation("io.github.reandroid:ARSCLib:1.1.7")
 
     implementation("org.jetbrains.kotlin:kotlin-reflect:1.8.20-RC")
     testImplementation("org.jetbrains.kotlin:kotlin-test:1.8.20-RC")
