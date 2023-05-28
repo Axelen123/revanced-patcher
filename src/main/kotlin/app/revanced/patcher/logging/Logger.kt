@@ -1,5 +1,4 @@
 package app.revanced.patcher.logging
-
 interface Logger {
     fun error(msg: String) {}
     fun warn(msg: String) {}

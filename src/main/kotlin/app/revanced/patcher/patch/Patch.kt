@@ -17,9 +17,8 @@ sealed interface Patch<out T : Context> : Closeable {
      * The main function of the [Patch] which the patcher will call.
      *
      * @param context The [Context] the patch will work on.
-     * @return The result of executing the patch.
      */
-    fun execute(context: @UnsafeVariance T): PatchResult
+    fun execute(context: @UnsafeVariance T)
 
     /**
      * The closing function for this patch.

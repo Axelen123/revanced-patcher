@@ -10,7 +10,6 @@ import app.revanced.patcher.extensions.replaceInstruction
 import app.revanced.patcher.patch.BytecodePatch
 import app.revanced.patcher.patch.OptionsContainer
 import app.revanced.patcher.patch.PatchOption
-import app.revanced.patcher.patch.PatchResult
 import app.revanced.patcher.patch.annotations.DependsOn
 import app.revanced.patcher.patch.annotations.Patch
 import app.revanced.patcher.usage.resource.annotation.ExampleResourceCompatibility
@@ -43,7 +42,7 @@ import kotlin.io.path.Path
 class ExampleBytecodePatch : BytecodePatch(listOf(ExampleFingerprint)) {
     // This function will be executed by the patcher.
     // You can treat it as a constructor
-    override fun execute(context: BytecodeContext): PatchResult {
+    override fun execute(context: BytecodeContext) {
         // Get the resolved method by its fingerprint from the resolver cache
         val result = ExampleFingerprint.result!!
 
@@ -130,12 +129,6 @@ class ExampleBytecodePatch : BytecodePatch(listOf(ExampleFingerprint)) {
                 invoke-virtual { v0, v1 }, Ljava/io/PrintStream;->println(Ljava/lang/String;)V
                 """
         )
-
-        // Finally, tell the patcher that this patch was a success.
-        // You can also return PatchResult.Error with a message.
-        // If an exception is thrown inside this function,
-        // a PatchResultError will be returned with the error message.
-        return PatchResult.Success
     }
 
     /**

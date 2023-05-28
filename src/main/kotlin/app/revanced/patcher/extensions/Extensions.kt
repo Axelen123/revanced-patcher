@@ -39,7 +39,7 @@ fun MutableMethodImplementation.replaceInstructions(index: Int, instructions: Li
 }
 
 fun MutableMethodImplementation.removeInstructions(index: Int, count: Int) {
-    for (i in count downTo 0) {
+    for (i in count - 1 downTo 0) {
         this.removeInstruction(index + i)
     }
 }
@@ -101,11 +101,19 @@ fun MutableMethod.removeInstruction(index: Int) = this.implementation!!.removeIn
 fun MutableMethod.label(index: Int) = this.implementation!!.newLabelForIndex(index)
 
 /**
- * Get the instruction at the given index in the method's implementation.
+ * Get an instruction at the given index in the method's implementation.
  * @param index The index to get the instruction at.
  * @return The instruction.
  */
 fun MutableMethod.instruction(index: Int): BuilderInstruction = this.implementation!!.instructions[index]
+
+/**
+ * Get an instruction at the given index in the method's implementation.
+ * @param index The index to get the instruction at.
+ * @param T The type of instruction to return.
+ * @return The instruction.
+ */
+fun <T> MutableMethod.instruction(index: Int): T = instruction(index) as T
 
 /**
  * Add smali instructions to the method.

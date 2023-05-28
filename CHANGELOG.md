@@ -1,3 +1,79 @@
+# [9.0.0](https://github.com/revanced/revanced-patcher/compare/v8.0.0...v9.0.0) (2023-05-23)
+
+
+* refactor!: rename parameter ([526a3d7](https://github.com/revanced/revanced-patcher/commit/526a3d7c359e2d95d26756da0f88d5ce975f5d9b))
+
+
+### BREAKING CHANGES
+
+* This changes named parameters.
+
+# [9.0.0-dev.1](https://github.com/revanced/revanced-patcher/compare/v8.0.0...v9.0.0-dev.1) (2023-05-23)
+
+
+* refactor!: rename parameter ([526a3d7](https://github.com/revanced/revanced-patcher/commit/526a3d7c359e2d95d26756da0f88d5ce975f5d9b))
+
+
+### BREAKING CHANGES
+
+* This changes named parameters.
+
+# [8.0.0](https://github.com/revanced/revanced-patcher/compare/v7.1.1...v8.0.0) (2023-05-13)
+
+
+* feat!: add `classDef` parameter to `MethodFingerprint` (#175) ([a205220](https://github.com/revanced/revanced-patcher/commit/a2052202b23037150df6aadc47f6e91efcd481cf)), closes [#175](https://github.com/revanced/revanced-patcher/issues/175)
+
+
+### BREAKING CHANGES
+
+* This changes the signature of the `customFingerprint` function.
+
+# [8.0.0-dev.1](https://github.com/revanced/revanced-patcher/compare/v7.1.1...v8.0.0-dev.1) (2023-05-10)
+
+
+* feat!: add `classDef` parameter to `MethodFingerprint` (#175) ([a205220](https://github.com/revanced/revanced-patcher/commit/a2052202b23037150df6aadc47f6e91efcd481cf)), closes [#175](https://github.com/revanced/revanced-patcher/issues/175)
+
+
+### BREAKING CHANGES
+
+* This changes the signature of the `customFingerprint` function.
+
+## [7.1.1](https://github.com/revanced/revanced-patcher/compare/v7.1.0...v7.1.1) (2023-05-07)
+
+
+### Bug Fixes
+
+* remove `count` instead of `count + 1` instructions with `removeInstructions` ([#167](https://github.com/revanced/revanced-patcher/issues/167)) ([98f8eed](https://github.com/revanced/revanced-patcher/commit/98f8eedecd72b0afe6a0f099a3641a1cc6be2698))
+
+## [7.1.1-dev.1](https://github.com/revanced/revanced-patcher/compare/v7.1.0...v7.1.1-dev.1) (2023-05-07)
+
+
+### Bug Fixes
+
+* remove `count` instead of `count + 1` instructions with `removeInstructions` ([#167](https://github.com/revanced/revanced-patcher/issues/167)) ([98f8eed](https://github.com/revanced/revanced-patcher/commit/98f8eedecd72b0afe6a0f099a3641a1cc6be2698))
+
+# [7.1.0](https://github.com/revanced/revanced-patcher/compare/v7.0.0...v7.1.0) (2023-05-05)
+
+
+### Features
+
+* add appreciation message for new contributors ([d674362](https://github.com/revanced/revanced-patcher/commit/d67436271ddca9ccfe008272c1ca82c6123ae7ee))
+* add overload to get instruction as type ([49c173d](https://github.com/revanced/revanced-patcher/commit/49c173dc14137ddd198a611e9882dc71300831ee))
+
+# [7.1.0-dev.2](https://github.com/revanced/revanced-patcher/compare/v7.1.0-dev.1...v7.1.0-dev.2) (2023-05-05)
+
+
+### Features
+
+* add overload to get instruction as type ([49c173d](https://github.com/revanced/revanced-patcher/commit/49c173dc14137ddd198a611e9882dc71300831ee))
+
+# [7.1.0-dev.1](https://github.com/revanced/revanced-patcher/compare/v7.0.0...v7.1.0-dev.1) (2023-04-30)
+
+
+### Features
+
+* add appreciation message for new contributors ([d674362](https://github.com/revanced/revanced-patcher/commit/d67436271ddca9ccfe008272c1ca82c6123ae7ee))
+
 # [7.0.0](https://github.com/revanced/revanced-patcher/compare/v6.4.3...v7.0.0) (2023-02-26)
 
 

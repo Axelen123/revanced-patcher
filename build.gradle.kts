@@ -1,6 +1,5 @@
 plugins {
-    kotlin("jvm") version "1.7.0"
-    java
+    kotlin("jvm") version "1.8.10"
     `maven-publish`
 }
 
@@ -24,12 +23,12 @@ dependencies {
     implementation("xpp3:xpp3:1.1.4c")
     implementation("app.revanced:smali:2.5.3-a3836654")
     implementation("app.revanced:multidexlib2:2.5.3-a3836654")
-    implementation("app.revanced:apktool-lib:2.7.0")
-    implementation(kotlin("reflect"))
+    implementation("io.github.reandroid:ARSCLib:1.1.7")
+
+    implementation("org.jetbrains.kotlin:kotlin-reflect:1.8.20-RC")
+    testImplementation("org.jetbrains.kotlin:kotlin-test:1.8.20-RC")
 
     compileOnly("com.google.android:android:4.1.1.4")
-
-    testImplementation(kotlin("test"))
 }
 
 tasks {
@@ -46,6 +45,10 @@ tasks {
 
 java {
     withSourcesJar()
+}
+
+kotlin {
+    jvmToolchain(11)
 }
 
 publishing {

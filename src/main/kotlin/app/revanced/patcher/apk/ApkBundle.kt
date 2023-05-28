@@ -1,116 +1,169 @@
 package app.revanced.patcher.apk
 
-import app.revanced.patcher.PatcherOptions
+import com.reandroid.apk.ApkModule
+import com.reandroid.apk.xmlencoder.EncodeMaterials
+import com.reandroid.arsc.util.FrameworkTable
+import com.reandroid.arsc.value.Entry
+import com.reandroid.arsc.value.ResConfig
+import com.reandroid.common.TableEntryStore
+import com.reandroid.identifiers.TableIdentifier
+import java.io.File
 
 /**
  * An [Apk] file of type [Apk.Split].
  *
- * @param base The apk file of type [Apk.Base].
- * @param split The [Apk.Split] files.
+ * @param files A list of apk files to load.
  */
-class ApkBundle(
-    val base: Apk.Base,
-    split: Split? = null
-) {
+class ApkBundle(files: List<File>) {
     /**
-     * The [Apk.Split] files.
+     * The [Apk.Base] of this [ApkBundle].
      */
-    var split = split
-        internal set
+    val base: Apk.Base
 
     /**
-     * Merge all [Apk.Split] files to [Apk.Base].
-     * This will set [split] to null.
-     * @param options The [PatcherOptions] to write the resources with.
+     * A map containing all the [Apk.Split]s in this bundle associated by their configuration.
      */
-    internal fun mergeResources(options: PatcherOptions) {
-        split?.let { base.mergeSplitResources(it, options) }
-        split = null
+    val splits: Map<String, Apk.Split>?
+
+    private fun ApkModule.isFeatureModule() = androidManifestBlock.manifestElement.let {
+        it.searchAttributeByName("isFeatureSplit")?.valueAsBoolean == true || it.searchAttributeByName("configForSplit") != null
+    }
+
+    init {
+        var baseApk: Apk.Base? = null
+        val splitList = mutableListOf<Apk.Split>()
+
+        files.forEach {
+            val module = ApkModule.loadApkFile(it)
+            when {
+                module.isBaseModule -> {
+                    if (baseApk != null) {
+                        throw IllegalArgumentException("Cannot have more than one base apk")
+                    }
+                    baseApk = Apk.Base(module)
+                }
+
+                !module.isFeatureModule() -> {
+                    val config = module.split.removePrefix("config.")
+
+                    splitList.add(
+                        when {
+                            config.length == 2 -> Apk.Split.Language(config, module)
+                            Apk.Split.Library.architectures.contains(config) -> Apk.Split.Library(config, module)
+                            ResConfig.Density.valueOf(config) != null -> Apk.Split.Asset(config, module)
+                            else -> throw IllegalArgumentException("Unknown split: $config")
+                        }
+                    )
+                }
+            }
+        }
+
+        splits = splitList.takeIf { it.size > 0 }?.let { splitList.associateBy { it.config } }
+        base = baseApk ?: throw IllegalArgumentException("Base apk not found")
     }
 
     /**
-     * Write resources for the files in [ApkBundle].
-     *
-     * @param options The [PatcherOptions] to write the resources with.
-     * @return A sequence of the [Apk] files which resources are being written.
+     * A [Sequence] yielding all [Apk]s in this [ApkBundle].
      */
-    internal fun writeResources(options: PatcherOptions) = sequence {
-        with(base) {
-            writeResources(options)
+    val all = sequence {
+        yield(base)
+        splits?.values?.let {
+            yieldAll(it)
+        }
+    }
 
-            yield(SplitApkResult.Write(this))
+    /**
+     * Write all the [Apk]s inside the bundle to a folder.
+     *
+     * @param folder The folder to write the [Apk]s to.
+     * @return A sequence of the [Apk] files which are being refreshed.
+     */
+    internal fun write(folder: File) = all.map {
+        val file = folder.resolve(it.toString())
+        var exception: Apk.ApkException? = null
+        try {
+            it.write(file)
+        } catch (e: Apk.ApkException) {
+            exception = e
         }
 
-        split?.all?.forEach { splitApk ->
-            with(splitApk) {
-                var exception: Apk.ApkException.Write? = null
+        SplitApkResult(it, file, exception)
+    }
 
-                try {
-                    writeResources(options)
-                } catch (writeException: Apk.ApkException.Write) {
-                    exception = writeException
+    inner class ResourceTable {
+        private val packageName = base.packageMetadata.packageName
+        internal val entryStore = TableEntryStore()
+        internal val encodeMaterials: EncodeMaterials
+        internal val tableIdentifier: TableIdentifier
+        private val modifiedResources = HashMap<String, HashMap<String, Int>>()
+
+
+        // TODO: move this elsewhere
+        /**
+         * Get the [Apk.ResourceContainer] for the specified configuration.
+         *
+         * @param config The config to search for.
+         */
+        fun query(config: String) = splits?.get(config)?.resources ?: base.resources
+
+        /**
+         * Resolve a resource id for the specified resource.
+         *
+         * @param type The type of the resource.
+         * @param name The name of the resource.
+         * @return The id of the resource.
+         */
+        fun resolve(type: String, name: String) =
+            modifiedResources[type]?.get(name)
+                ?: tableIdentifier.get(packageName, type, name)?.resourceId
+                ?: throw Apk.ApkException.InvalidReference(
+                    type,
+                    name
+                )
+
+        internal fun registerChanged(entry: Entry) {
+            modifiedResources.getOrPut(entry.typeName, ::HashMap)[entry.name] = entry.id
+        }
+
+        init {
+            encodeMaterials = object : EncodeMaterials() {
+                override fun resolveLocalResourceId(type: String, name: String) = resolve(type, name)
+            }
+            tableIdentifier = encodeMaterials.tableIdentifier
+
+            all.map { it.resources }.forEach {
+                it.tableBlock?.let { table ->
+                    entryStore.add(table)
+                    tableIdentifier.load(table)
                 }
 
-                yield(SplitApkResult.Write(this, exception))
+                it.resourceTable = this
+            }
+
+            base.resources.also {
+                encodeMaterials.currentPackage = it.packageBlock
+
+                it.tableBlock!!.frameWorks.forEach { fw ->
+                    if (fw is FrameworkTable) {
+                        entryStore.add(fw)
+                        encodeMaterials.addFramework(fw)
+                    }
+                }
             }
         }
     }
 
     /**
-     * Decode resources for the files in [ApkBundle].
-     *
-     * @param options The [PatcherOptions] to decode the resources with.
-     * @param mode The [Apk.ResourceDecodingMode] to use.
-     * @return A sequence of the [Apk] files which resources are being decoded.
+     * The global resource container.
      */
-    internal fun decodeResources(options: PatcherOptions, mode: Apk.ResourceDecodingMode) = sequence {
-        with(base) {
-            yield(this)
-            decodeResources(options, mode)
-        }
-
-        split?.all?.forEach {
-            yield(it)
-            it.decodeResources(options, mode)
-        }
-    }
-
+    val resources = ResourceTable()
 
     /**
-     * Class for [Apk.Split].
-     *
-     * @param library The apk file of type [Apk.Base].
-     * @param asset The apk file of type [Apk.Base].
-     * @param language The apk file of type [Apk.Base].
-     */
-    class Split(
-        library: Apk.Split.Library,
-        asset: Apk.Split.Asset,
-        language: Apk.Split.Language
-    ) {
-        var library = library
-            internal set
-        var asset = asset
-            internal set
-        var language = language
-            internal set
-
-        val all get() = listOfNotNull(library, asset, language)
-    }
-
-    /**
-     * The result of writing a [Split] [Apk] file.
+     * The result of writing an [Apk] file.
      *
      * @param apk The corresponding [Apk] file.
+     * @param file The location that the [Apk] was written to.
      * @param exception The optional [Apk.ApkException] when an exception occurred.
      */
-    sealed class SplitApkResult(val apk: Apk, val exception: Apk.ApkException? = null) {
-        /**
-         * The result of writing a [Split] [Apk] file.
-         *
-         * @param apk The corresponding [Apk] file.
-         * @param exception The optional [Apk.ApkException] when an exception occurred.
-         */
-        class Write(apk: Apk, exception: Apk.ApkException.Write? = null) : SplitApkResult(apk, exception)
-    }
+    data class SplitApkResult(val apk: Apk, val file: File, val exception: Apk.ApkException? = null)
 }
