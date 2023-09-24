@@ -1,3 +1,225 @@
+## [11.0.4](https://github.com/revanced/revanced-patcher/compare/v11.0.3...v11.0.4) (2023-07-01)
+
+
+### Bug Fixes
+
+* clear method lookup maps ([#198](https://github.com/revanced/revanced-patcher/issues/198)) ([9d81baf](https://github.com/revanced/revanced-patcher/commit/9d81baf4b4ca7514f8a1009e72218638609a7c7f))
+
+## [11.0.4-dev.1](https://github.com/revanced/revanced-patcher/compare/v11.0.3...v11.0.4-dev.1) (2023-07-01)
+
+
+### Bug Fixes
+
+* clear method lookup maps ([#198](https://github.com/revanced/revanced-patcher/issues/198)) ([9d81baf](https://github.com/revanced/revanced-patcher/commit/9d81baf4b4ca7514f8a1009e72218638609a7c7f))
+
+## [11.0.3](https://github.com/revanced/revanced-patcher/compare/v11.0.2...v11.0.3) (2023-06-30)
+
+
+### Bug Fixes
+
+* NPE on method lookup ([#195](https://github.com/revanced/revanced-patcher/issues/195)) ([fcef434](https://github.com/revanced/revanced-patcher/commit/fcef4342e8bde73945e8315aef6337cc8a8d8572))
+
+## [11.0.3-dev.1](https://github.com/revanced/revanced-patcher/compare/v11.0.2...v11.0.3-dev.1) (2023-06-28)
+
+
+### Bug Fixes
+
+* NPE on method lookup ([#195](https://github.com/revanced/revanced-patcher/issues/195)) ([fcef434](https://github.com/revanced/revanced-patcher/commit/fcef4342e8bde73945e8315aef6337cc8a8d8572))
+
+## [11.0.2](https://github.com/revanced/revanced-patcher/compare/v11.0.1...v11.0.2) (2023-06-27)
+
+
+### Bug Fixes
+
+* catch exceptions from closing patches ([d5d6f85](https://github.com/revanced/revanced-patcher/commit/d5d6f85084c03ed9c776632823ca12394a716167))
+* do not load annotations as patches ([519359a](https://github.com/revanced/revanced-patcher/commit/519359a9eb0e9dfa390c5016e9fe4a7490b8ab18))
+* only close succeeded patches ([b8151eb](https://github.com/revanced/revanced-patcher/commit/b8151ebccb5b27dd9e06fa63235cf9baeef1c0ee))
+* use `versionCode` if `versionName` is unavailable ([6e1b647](https://github.com/revanced/revanced-patcher/commit/6e1b6479b677657c226693e9cc6b63f4ef2ee060))
+
+
+### Performance Improvements
+
+* resolve fingerprints using method maps ([#185](https://github.com/revanced/revanced-patcher/issues/185)) ([d718134](https://github.com/revanced/revanced-patcher/commit/d718134ab26423e02708e01eba711737f9260ba0))
+
+## [11.0.2-dev.4](https://github.com/revanced/revanced-patcher/compare/v11.0.2-dev.3...v11.0.2-dev.4) (2023-06-27)
+
+
+### Bug Fixes
+
+* do not load annotations as patches ([519359a](https://github.com/revanced/revanced-patcher/commit/519359a9eb0e9dfa390c5016e9fe4a7490b8ab18))
+
+## [11.0.2-dev.3](https://github.com/revanced/revanced-patcher/compare/v11.0.2-dev.2...v11.0.2-dev.3) (2023-06-27)
+
+
+### Performance Improvements
+
+* resolve fingerprints using method maps ([#185](https://github.com/revanced/revanced-patcher/issues/185)) ([d718134](https://github.com/revanced/revanced-patcher/commit/d718134ab26423e02708e01eba711737f9260ba0))
+
+## [11.0.2-dev.2](https://github.com/revanced/revanced-patcher/compare/v11.0.2-dev.1...v11.0.2-dev.2) (2023-06-18)
+
+
+### Bug Fixes
+
+* use `versionCode` if `versionName` is unavailable ([6e1b647](https://github.com/revanced/revanced-patcher/commit/6e1b6479b677657c226693e9cc6b63f4ef2ee060))
+
+## [11.0.2-dev.1](https://github.com/revanced/revanced-patcher/compare/v11.0.1...v11.0.2-dev.1) (2023-06-14)
+
+
+### Bug Fixes
+
+* catch exceptions from closing patches ([d5d6f85](https://github.com/revanced/revanced-patcher/commit/d5d6f85084c03ed9c776632823ca12394a716167))
+* only close succeeded patches ([b8151eb](https://github.com/revanced/revanced-patcher/commit/b8151ebccb5b27dd9e06fa63235cf9baeef1c0ee))
+
+## [11.0.1](https://github.com/revanced/revanced-patcher/compare/v11.0.0...v11.0.1) (2023-06-12)
+
+
+### Bug Fixes
+
+* revert using `OutputStream.nullOutputStream` ([f02a426](https://github.com/revanced/revanced-patcher/commit/f02a42610b7698fc8cc6bc5183c9ccba2ed96cda))
+
+## [11.0.1-dev.1](https://github.com/revanced/revanced-patcher/compare/v11.0.0...v11.0.1-dev.1) (2023-06-12)
+
+
+### Bug Fixes
+
+* revert using `OutputStream.nullOutputStream` ([f02a426](https://github.com/revanced/revanced-patcher/commit/f02a42610b7698fc8cc6bc5183c9ccba2ed96cda))
+
+# [11.0.0](https://github.com/revanced/revanced-patcher/compare/v10.0.0...v11.0.0) (2023-06-10)
+
+
+### Bug Fixes
+
+* add imports to fix failing tests ([43d6868](https://github.com/revanced/revanced-patcher/commit/43d6868d1f59922f9812f3e4a2a890f3b331def6))
+
+
+* refactor!: move extension functions to their corresponding classes ([a12fe7d](https://github.com/revanced/revanced-patcher/commit/a12fe7dd9e976c38a0a82fe35e6650f58f815de4))
+* refactor!: use proper extension function names ([efdd01a](https://github.com/revanced/revanced-patcher/commit/efdd01a9886b6f06af213731824621964367b2a3))
+* fix!: implement extension functions consistently ([aacf900](https://github.com/revanced/revanced-patcher/commit/aacf9007647b1cc11bc40053625802573efda6ef))
+
+
+### BREAKING CHANGES
+
+* This changes the import paths for extension functions.
+* This changes the names of extension functions
+* This changes the name of functions
+
+# [11.0.0-dev.2](https://github.com/revanced/revanced-patcher/compare/v11.0.0-dev.1...v11.0.0-dev.2) (2023-06-09)
+
+
+### Bug Fixes
+
+* add imports to fix failing tests ([43d6868](https://github.com/revanced/revanced-patcher/commit/43d6868d1f59922f9812f3e4a2a890f3b331def6))
+
+# [11.0.0-dev.1](https://github.com/revanced/revanced-patcher/compare/v10.0.0...v11.0.0-dev.1) (2023-06-07)
+
+
+* refactor!: move extension functions to their corresponding classes ([a12fe7d](https://github.com/revanced/revanced-patcher/commit/a12fe7dd9e976c38a0a82fe35e6650f58f815de4))
+* refactor!: use proper extension function names ([efdd01a](https://github.com/revanced/revanced-patcher/commit/efdd01a9886b6f06af213731824621964367b2a3))
+* fix!: implement extension functions consistently ([aacf900](https://github.com/revanced/revanced-patcher/commit/aacf9007647b1cc11bc40053625802573efda6ef))
+
+
+### BREAKING CHANGES
+
+* This changes the import paths for extension functions.
+* This changes the names of extension functions
+* This changes the name of functions
+
+# [10.0.0](https://github.com/revanced/revanced-patcher/compare/v9.0.0...v10.0.0) (2023-06-07)
+
+
+* fix!: check for two methods parameters orders (#183) ([b6d6a75](https://github.com/revanced/revanced-patcher/commit/b6d6a7591ba1c0b48ffdef52352709564da8d9be)), closes [#183](https://github.com/revanced/revanced-patcher/issues/183)
+
+
+### BREAKING CHANGES
+
+* This requires changes to `MethodFingerprint`
+
+# [10.0.0-dev.1](https://github.com/revanced/revanced-patcher/compare/v9.0.0...v10.0.0-dev.1) (2023-06-07)
+
+
+* fix!: check for two methods parameters orders (#183) ([b6d6a75](https://github.com/revanced/revanced-patcher/commit/b6d6a7591ba1c0b48ffdef52352709564da8d9be)), closes [#183](https://github.com/revanced/revanced-patcher/issues/183)
+
+
+### BREAKING CHANGES
+
+* This requires changes to `MethodFingerprint`
+
+# [9.0.0](https://github.com/revanced/revanced-patcher/compare/v8.0.0...v9.0.0) (2023-05-23)
+
+
+* refactor!: rename parameter ([526a3d7](https://github.com/revanced/revanced-patcher/commit/526a3d7c359e2d95d26756da0f88d5ce975f5d9b))
+
+
+### BREAKING CHANGES
+
+* This changes named parameters.
+
+# [9.0.0-dev.1](https://github.com/revanced/revanced-patcher/compare/v8.0.0...v9.0.0-dev.1) (2023-05-23)
+
+
+* refactor!: rename parameter ([526a3d7](https://github.com/revanced/revanced-patcher/commit/526a3d7c359e2d95d26756da0f88d5ce975f5d9b))
+
+
+### BREAKING CHANGES
+
+* This changes named parameters.
+
+# [8.0.0](https://github.com/revanced/revanced-patcher/compare/v7.1.1...v8.0.0) (2023-05-13)
+
+
+* feat!: add `classDef` parameter to `MethodFingerprint` (#175) ([a205220](https://github.com/revanced/revanced-patcher/commit/a2052202b23037150df6aadc47f6e91efcd481cf)), closes [#175](https://github.com/revanced/revanced-patcher/issues/175)
+
+
+### BREAKING CHANGES
+
+* This changes the signature of the `customFingerprint` function.
+
+# [8.0.0-dev.1](https://github.com/revanced/revanced-patcher/compare/v7.1.1...v8.0.0-dev.1) (2023-05-10)
+
+
+* feat!: add `classDef` parameter to `MethodFingerprint` (#175) ([a205220](https://github.com/revanced/revanced-patcher/commit/a2052202b23037150df6aadc47f6e91efcd481cf)), closes [#175](https://github.com/revanced/revanced-patcher/issues/175)
+
+
+### BREAKING CHANGES
+
+* This changes the signature of the `customFingerprint` function.
+
+## [7.1.1](https://github.com/revanced/revanced-patcher/compare/v7.1.0...v7.1.1) (2023-05-07)
+
+
+### Bug Fixes
+
+* remove `count` instead of `count + 1` instructions with `removeInstructions` ([#167](https://github.com/revanced/revanced-patcher/issues/167)) ([98f8eed](https://github.com/revanced/revanced-patcher/commit/98f8eedecd72b0afe6a0f099a3641a1cc6be2698))
+
+## [7.1.1-dev.1](https://github.com/revanced/revanced-patcher/compare/v7.1.0...v7.1.1-dev.1) (2023-05-07)
+
+
+### Bug Fixes
+
+* remove `count` instead of `count + 1` instructions with `removeInstructions` ([#167](https://github.com/revanced/revanced-patcher/issues/167)) ([98f8eed](https://github.com/revanced/revanced-patcher/commit/98f8eedecd72b0afe6a0f099a3641a1cc6be2698))
+
+# [7.1.0](https://github.com/revanced/revanced-patcher/compare/v7.0.0...v7.1.0) (2023-05-05)
+
+
+### Features
+
+* add appreciation message for new contributors ([d674362](https://github.com/revanced/revanced-patcher/commit/d67436271ddca9ccfe008272c1ca82c6123ae7ee))
+* add overload to get instruction as type ([49c173d](https://github.com/revanced/revanced-patcher/commit/49c173dc14137ddd198a611e9882dc71300831ee))
+
+# [7.1.0-dev.2](https://github.com/revanced/revanced-patcher/compare/v7.1.0-dev.1...v7.1.0-dev.2) (2023-05-05)
+
+
+### Features
+
+* add overload to get instruction as type ([49c173d](https://github.com/revanced/revanced-patcher/commit/49c173dc14137ddd198a611e9882dc71300831ee))
+
+# [7.1.0-dev.1](https://github.com/revanced/revanced-patcher/compare/v7.0.0...v7.1.0-dev.1) (2023-04-30)
+
+
+### Features
+
+* add appreciation message for new contributors ([d674362](https://github.com/revanced/revanced-patcher/commit/d67436271ddca9ccfe008272c1ca82c6123ae7ee))
+
 # [7.0.0](https://github.com/revanced/revanced-patcher/compare/v6.4.3...v7.0.0) (2023-02-26)
 
 
